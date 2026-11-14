@@ -41,7 +41,14 @@ def main():
  if 'window.__GUIDE_DATA__' not in runtime:raise SystemExit('Keep the dual offline/hosted data reader from materialize_site.py, or adapt this packager to your new reader.')
  data={path.stem:json.loads(path.read_text())for path in sorted((project/'data').glob('*.json'))}
  if not isinstance(data.get('mesh-data'),list) or not data['mesh-data']:raise SystemExit('Provide a nonempty mesh-data array.')
- if len({m['id']for m in data['mesh-data']})!=len(data['mesh-data']):raise SystemExit('Mesh IDs must be unique.')
+ mesh_ids={m['id'] for m in data['mesh-data']}
+ if len(mesh_ids)!=len(data['mesh-data']):raise SystemExit('Mesh IDs must be unique.')
+ clearance=data.get('clearance-data',{})
+ if not isinstance(clearance,dict):raise SystemExit('clearance-data must map step keys to mesh ID pairs.')
+ for step,pairs in clearance.items():
+  if not isinstance(pairs,list) or any(not isinstance(pair,list) or len(pair)!=2 or
+      any(not isinstance(mesh_id,str) or mesh_id not in mesh_ids for mesh_id in pair) or pair[0]==pair[1] for pair in pairs):
+   raise SystemExit('Invalid clearance mesh pair for '+step)
  static=project/'static';static_files=[];mapping={}
  if static.exists():
   for path in sorted(static.rglob('*')):

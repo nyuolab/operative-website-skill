@@ -2,6 +2,9 @@
     'use strict';
     const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
     const { meshes, manifest } = window.__PTERIONAL_DATA__;
+    const displayConflicts = window.__GUIDE_DATA__?.['clearance-data'] ??
+        JSON.parse($('#clearance-data')?.textContent || '{}');
+    const clearanceMeshById = new Map(meshes.map(mesh => [mesh.id, mesh]));
     const papers = manifest.papers;
     const escape = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
     const mobileQuery = matchMedia('(max-width:760px)');
@@ -165,17 +168,29 @@
         distance = v.distance; if (v.zoom != null)
         viewZoom = v.zoom; if (v.pan)
         pan = [...v.pan]; viewChanged(); render(); }
-    // Orbit the view around the selected target with a fixed frame-up direction. Move the anatomy with the pointer:
-    // dragging right moves the eye left, and dragging up moves the eye down. Rebuilding look-at prevents camera roll.
-    function rotateByDrag(dx, dy, k = .008) { const len = Math.hypot(dx, dy); if (!len)
-        return; viewQ = qNorm(qMul(qAxis([dy, dx, 0], len * k), viewQ)); viewChanged(); }
-    function orbitByDrag(dx, dy, k = .008) { if (!dx && !dy)
-        return; const M = qMat(viewQ), eye = [M[6], M[7], M[8]], worldFrame = camFrame === 'world', up = worldFrame ? [0, 0, 1] : [0, 1, 0], h0 = eye[0], h1 = worldFrame ? eye[1] : eye[2];
-        // qMat maps the model/world into view coordinates: its third ROW is the eye direction in that frame.
-        // The third column is a different vector and feeds a false direction back into every drag, causing jumps.
-        // At the exact pole the eye has no azimuth; retain it from the camera-right row until off the pole.
-        const az = Math.hypot(h0, h1) > 1e-5 ? Math.atan2(h0, h1) : worldFrame ? Math.atan2(M[1], -M[0]) : Math.atan2(-M[2], M[0]);
-        const el = Math.asin(Math.max(-1, Math.min(1, worldFrame ? eye[2] : eye[1]))), nextAz = az - dx * k, nextEl = Math.max(-1.52, Math.min(1.52, el + dy * k)), c = Math.cos(nextEl), nextEye = worldFrame ? [c * Math.sin(nextAz), c * Math.cos(nextAz), Math.sin(nextEl)] : [c * Math.sin(nextAz), Math.sin(nextEl), c * Math.cos(nextAz)]; viewQ = qLook(nextEye, up); viewChanged(); }
+    // Convert the room frame (+Z up) into the same orbit coordinates as the
+    // head frame (+Y up). Preserve existing roll through ordinary drags.
+    function orbitByDrag(dx, dy, k = .008) {
+        if (!dx && !dy)
+            return;
+        const frameToOrbit = camFrame === 'world' ? qAxis([1, 0, 0], -Math.PI / 2) : [0, 0, 0, 1];
+        const orientation = qMul(viewQ, qConj(frameToOrbit));
+        const M = qMat(orientation);
+        const azimuth = Math.hypot(M[6], M[8]) > 1e-8 ? Math.atan2(M[6], M[8]) : Math.atan2(-M[2], M[0]);
+        const elevation = Math.asin(Math.max(-1, Math.min(1, M[7])));
+        // The up direction is undefined at the poles. Stop just short, and
+        // let a preset already closer to a pole move away without jumping.
+        const limit = 1.52;
+        const levelView = qFromAngles(-azimuth, elevation);
+        const roll = qMul(orientation, qConj(levelView));
+        const cosine = 1 - 2 * roll[2] ** 2, sine = 2 * roll[2] * roll[3];
+        const horizontal = dx * cosine - dy * sine;
+        const vertical = dx * sine + dy * cosine;
+        const nextElevation = Math.max(Math.min(-limit, elevation),
+            Math.min(Math.max(limit, elevation), elevation + vertical * k));
+        viewQ = qNorm(qMul(qMul(roll, qFromAngles(-azimuth + horizontal * k, nextElevation)), frameToOrbit));
+        viewChanged();
+    }
     function markInteraction() { interactionActive = true; pickDirty = false; clearTimeout(interactionTimer); interactionTimer = setTimeout(() => { if (pointers.size)
         return; interactionActive = false; render(true); }, 140); }
     // Camera glide: slerp the orientation and ease target, distance, pan and zoom to a preset (same frame) over
@@ -569,26 +584,46 @@
         $('#openingValue').textContent = '100%';
         render();
         return;
-    } const start = performance.now(); opening = 0; function tick(now) { if (token !== animationToken || mode !== '3d' || !procedure)
+    } const start = performance.now(); opening = 0; $('#opening').value = 0; $('#openingValue').textContent = '0%'; function tick(now) { if (token !== animationToken || mode !== '3d' || !procedure)
         return; opening = Math.min(1, (now - start) / 1500); $('#opening').value = Math.round(opening * 100); $('#openingValue').textContent = Math.round(opening * 100) + '%'; render(); if (opening < 1)
         requestAnimationFrame(tick); } requestAnimationFrame(tick); }
     $('#replay').onclick = () => { beforeCurrent = false; $('#compareChange').setAttribute('aria-pressed', false); $('#compareChange').textContent = 'Before'; playStepAnimation(); };
     $('#opening').oninput = e => { animationToken++; opening = +e.target.value / 100; $('#openingValue').textContent = Math.round(opening * 100) + '%'; render(); };
-    function visible(m) { if (m.hidden || hiddenWhileSeparated(m))
+    function hiddenByClearance() {
+        const hidden = new Set();
+        if (separateLayers)
+            return hidden;
+        const stepId = procedure ? steps[stage]?.id : 'rest';
+        const variant = Object.keys(config).sort()
+            .map(key => encodeURIComponent(key) + '=' + encodeURIComponent(config[key])).join('&');
+        const pairs = displayConflicts[[variant, operativeSide(), stepId].join('|')] || [];
+        for (const [keep, hide] of pairs) {
+            if (!hidden.has(keep) && baseVisible(clearanceMeshById.get(keep), true) &&
+                baseVisible(clearanceMeshById.get(hide), true))
+                hidden.add(hide);
+        }
+        return hidden;
+    }
+    function visible(m) {
+        return baseVisible(m) && !hiddenByClearance().has(m.id);
+    }
+    function baseVisible(m, wholeStep = false) { if (!m || m.hidden || hiddenWhileSeparated(m))
         return false; const side = meshSide(m); if (contextSide !== 'both' && side !== 'both' && side !== contextSide && !wholeScalp(m))
         return false; if (m.marker)
         return procedure && side === operativeSide() && m.markerStages.includes(steps[stage].id) && (!m.markerFissure || m.markerFissure === config.fissure); if (m.instrument) {
-        if (beforeCurrent || side !== operativeSide() || !instrumentsOn)
+        if (!procedure || (!wholeStep && beforeCurrent) || side !== operativeSide() || !instrumentsOn)
             return false;
         const match = m.instrumentStage === steps[stage].visualAction && (m.instrumentKind !== 'dura-wide' || config.fissure === 'yes') && (m.instrumentKind !== 'dura-low' || config.fissure === 'no');
         if (!match)
             return false;
+        if (wholeStep)
+            return true;
         if (m.instrumentKind === 'burr-1')
             return opening <= .5 || opening === 1;
         if (m.instrumentKind === 'burr-2')
             return opening >= .5;
         return true;
-    } if (m.group === 'arachnoid' && arachnoidSealed(m))
+    } if (!wholeStep && m.group === 'arachnoid' && arachnoidSealed(m))
         return false; if (SCALP_OVERLAP.has(m.id) && scalpShownOn(meshSide(m)))
         return false; return !!allEnabled[m.group] || !!enabled[m.group] && relevantMesh(m); }
     // The scalp is one covering: when a step shows the whole-head scalp (contextGroups) or its layer is expanded (All),
@@ -597,7 +632,7 @@
     // Atlas context sheets that coincide with the illustrative scalp (epicranial aponeurosis, frontalis, occipitalis,
     // temporoparietalis, atlas superficial temporal fascia): hidden while skin or galea of their side is drawn.
     const SCALP_OVERLAP = new Set(['CTX-44', 'CTX-45', 'CTX-46', 'CTX-47', 'CTX-78', 'CTX-79', 'CTX-100', 'CTX-101', 'ZA-29', 'ZA-30']);
-    function scalpShownOn(side) { return meshes.some(x => (x.group === 'skin' || x.group === 'galea') && (side === 'both' || meshSide(x) === side) && visible(x)); }
+    function scalpShownOn(side) { return meshes.some(x => (x.group === 'skin' || x.group === 'galea') && (side === 'both' || meshSide(x) === side) && baseVisible(x)); }
     // The translucent arachnoid is hidden while a closed dura of its side is drawn, so it never veils or floats
     // over a closed dura. On the operative side the dura counts as open from the dural opening until it has
     // fully closed again (the closing animation keeps the before state until it ends, as in surgicalState).
@@ -605,7 +640,7 @@
         return false; const s = steps[stage], state = { ...(beforeCurrent ? s.beforeState : s.state) }; if (!beforeCurrent && s.change === 'dura' && opening < 1)
         state.dura = s.beforeState.dura || s.state.dura; return !!state.dura; }
     function arachnoidSealed(m) { const side = meshSide(m); if (duraOpenOnSide(m))
-        return false; return meshes.some(d => d.group === 'dura' && meshSide(d) === side && visible(d)); }
+        return false; return meshes.some(d => d.group === 'dura' && meshSide(d) === side && baseVisible(d)); }
     function opacity(m) { return Math.max(0, Math.min(1, m.opacity ?? 1)); }
     function surgicalState(m) { let cut = 0, motion = 0, action = 1, windowAction = 1, burrAction = 0; // The isolated skull-base view keeps only the part of a vein near its sinus (record isolateKeep).
     if (m.isolateKeep && procedure && steps[stage]?.isolateBone)
@@ -1210,8 +1245,19 @@
         return; stopGlide(); surgeonChosen = false; attachCamera('head'); applyCamera({ frame: 'head', yaw: views[v][0], pitch: views[v][1] }); pan = [0, 0]; render(); }
     // Surgeon's View (room-framed): from the head of the table, above and behind the vertex, looking down at the
     // operative field as the seated surgeon sees it (screen up = toward the patient's feet). It is aimed at the bone
-    // window centre in the pose the step requests, so it also frames the field while the pose is still gliding.
-    function setSurgeonView() { stopGlide(); surgeonChosen = true; const sign = sideSign(), P = poseMatrix(requestedPose()); applyCamera({ frame: 'world', eye: [-.3 * sign, .62, .72], up: [0, 0, 1], target: posePoint(canonicalPoint([-2.7, .3, 1.25]), P), distance: 14 }); viewZoom = 1; pan = [0, 0]; render(); }
+    // window centre at the selected progress. Settle the pose before placing the inspection camera.
+    function setSurgeonView() {
+        stopGlide();
+        surgeonChosen = true;
+        animationToken++;
+        poseBlend = null;
+        updatePose();
+        const sign = sideSign(), center = canonicalPoint([-2.7, .3, 1.25]);
+        applyCamera({ frame: 'world', eye: [-.3 * sign, .62, .72], up: [0, 0, 1],
+            target: posePoint(center), distance: 14, zoom: 1 });
+        pan = [0, 0];
+        render();
+    }
     // ---- Patient Position controls (Layers & View panel) -------------------------------------------------------------
     // Changing the pose re-attaches the camera to the room first (same image), so the head visibly turns while the
     // table, holder and gizmo stay put. Slider input applies directly; the toggle and the defaults glide.
@@ -1504,7 +1550,7 @@ if(uSelected>.5)c=mix(c,vec3(.66,1.,.62),.50);if(uIsMarker>.5)c=mix(c,uColor.rgb
         available = true;
         window.guideQA = { solidDepth: true, zoomBy, syncMobileLayout, alignActiveStep, updateMobileReaderHeight, changeKind, procedureLabelRegion, activeLabelMesh, fixedLabelRect, visible, indicationGroups, chooseIndication, setProcedureSide, operativeSide, sideSign, canonicalPoint, onOperativeSide, relevantMesh, stepView, baseId, meshSide, meshOffset, scanPickAnchors, pickIdAt, meshCount: meshes.length, vertexCount, draw, activate, choose, configs, select, setTab, setView, enabled, allEnabled, getMeshes: () => meshes.map(({ data, vertexData, procedureCandidates, fissureCache, ...m }) => m), visibleCount: () => meshes.filter(visible).length, getSteps: () => steps, getState: () => ({ palette, viewZoom, isMobile, config: { ...config }, model: modelIndex() + 1, stage, mode, selected, contextAlpha, contextSide, prelabelsOn, opening, beforeCurrent, regionalContext, instrumentsOn, separateLayers, ...cameraState(), distance, pan: [...pan], target: [...target], enabled: { ...enabled }, allEnabled: { ...allEnabled } }), surgicalState, setPalette, opacity, refreshLabels: updateStepLabels,
             // Camera / head-pose API (see the orientation and head-positioning blocks near the top of this file).
-            getCamera: () => ({ q: [...viewQ], frame: camFrame, target: [...target], distance, pan: [...pan], viewZoom }), setCamera, rotateByDrag: (dx, dy) => { stopGlide(); rotateByDrag(dx, dy); render(); }, rollView: a => { stopGlide(); rollView(a); render(); }, attachCamera: f => { attachCamera(f); render(); }, viewBasis: () => ({ M: [...viewBasis().M], target: [...viewBasis().target] }), project, transform, pickAt: (x, y) => { draw(true); cacheLabelVisibility(); const id = pickIdAt(x, y); draw(); return id; }, setSurgeonView,
+            getCamera: () => ({ q: [...viewQ], frame: camFrame, target: [...target], distance, pan: [...pan], viewZoom }), setCamera, rotateByDrag: (dx, dy) => { stopGlide(); orbitByDrag(dx, dy); render(); }, rollView: a => { stopGlide(); rollView(a); render(); }, attachCamera: f => { attachCamera(f); render(); }, viewBasis: () => ({ M: [...viewBasis().M], target: [...viewBasis().target] }), project, transform, pickAt: (x, y) => { draw(true); cacheLabelVisibility(); const id = pickIdAt(x, y); draw(); return id; }, setSurgeonView,
             getPose: poseState, setPose, setPoseMode, resetPose, gravityInModel, posePoint, poseInverse, posePivot: [...POSE_PIVOT], poseDefault: { ...POSE_DEFAULT },
             // Soft-tissue deformation (curl / peel, incision parting, two-pass regions); see the curl block above.
             stateProgress, movePoint: (i, p) => movePoint(meshes[i], p), getDeformation: i => { const d = deformation(meshes[i]); return d && { curl: d.curl && { key: d.curl.mo.key, progress: d.curl.P, hingeTravel: d.curl.dh, angle: d.curl.T, radius: d.curl.mo.R, dmax: d.curl.mo.dmax }, split: d.split && { kind: d.split.kind, margin: d.split.margin, plane: d.split.plane }, part: d.part && { reveal: d.part.reveal, gap: d.part.gap, sign: d.part.sign }, groove: d.groove, leafCut: !!d.leafCut }; }, curlTuning: CURL_TUNING, variantSnapshot };
@@ -1574,7 +1620,7 @@ if(uSelected>.5)c=mix(c,vec3(.66,1.,.62),.50);if(uIsMarker>.5)c=mix(c,uColor.rgb
             return;
         updateGlide();
         updatePose();
-        const ratio = picking ? 1 : Math.min(devicePixelRatio || 1, interactionActive ? 1 : 2), maxDim = drawLimit(), w = Math.max(1, Math.min(maxDim, Math.round(host.clientWidth * ratio))), h = Math.max(1, Math.min(maxDim, Math.round(host.clientHeight * ratio)));
+        const ratio = picking ? 1 : Math.min(devicePixelRatio || 1, 1.5), maxDim = drawLimit(), w = Math.max(1, Math.min(maxDim, Math.round(host.clientWidth * ratio))), h = Math.max(1, Math.min(maxDim, Math.round(host.clientHeight * ratio)));
         if (!picking && (canvas.width !== w || canvas.height !== h)) {
             canvas.width = w;
             canvas.height = h;
@@ -1598,13 +1644,14 @@ if(uSelected>.5)c=mix(c,vec3(.66,1.,.62),.50);if(uIsMarker>.5)c=mix(c,uColor.rgb
         gl.uniform3fv(uniforms.Target, viewBasis().target);
         gl.uniform1f(uniforms.Pick, picking ? 1 : 0);
         gl.uniform1f(uniforms.Surgical, palette === 'surgical' ? 1 : 0);
-        gl.uniform1f(uniforms.Quality, isMobile || interactionActive ? 0 : 1);
+        gl.uniform1f(uniforms.Quality, isMobile ? 0 : 1);
         gl.uniform2f(uniforms.Viewport, w, h);
         gl.uniform3fv(uniforms.CamPos, cameraPosition());
         // Opaque meshes first; translucent ones afterwards, back to front, without depth writes. In the picking
         // pass translucent meshes are drawn after the opaque ones with the depth test, so a click identifies the
         // nearest surface; the arachnoid veil is left out (pickThrough) so clicks reach the cortex and vessels.
-        const visibleList = meshes.filter(visible), opaque = visibleList.filter(m => opacity(m) >= 1), depth = m => transform(movePoint(m, m.anchor))[2];
+        const hidden = hiddenByClearance();
+        const visibleList = meshes.filter(m => baseVisible(m) && !hidden.has(m.id)), opaque = visibleList.filter(m => opacity(m) >= 1), depth = m => transform(movePoint(m, m.anchor))[2];
         const translucent = visibleList.filter(m => opacity(m) < 1 && opacity(m) > 0 && !(picking && m.group === 'arachnoid')).map(m => [depth(m), m]).sort((a, b) => a[0] - b[0]).map(x => x[1]);
         const list = [...opaque, ...translucent];
         gl.disable(gl.BLEND);
@@ -1710,18 +1757,20 @@ if(uSelected>.5)c=mix(c,vec3(.66,1.,.62),.50);if(uIsMarker>.5)c=mix(c,uColor.rgb
         if (pickDirty) { pickDirty = false; draw(true); cacheLabelVisibility(); }
         draw();
     } }); }
-    // Plain one-pointer dragging orbits around the head on both axes while keeping the horizon level. Alt/Option drag
-    // rolls the camera about its line of sight. Shift/right-drag pans; two pointers pan, pinch and twist.
-    let pointers = new Map(), last = null, start = null, moved = 0, dragging = false, pinch = 0, hadMulti = false, pinchCenter = null, twist = null;
-    const pairAngle = p => Math.atan2(p[1][1] - p[0][1], p[1][0] - p[0][0]), wrapAngle = a => Math.atan2(Math.sin(a), Math.cos(a));
+    // One pointer orbits upright by default and rolls with Alt/Option held.
+    // Shift/right-drag pans; two pointers pan and pinch.
+    let pointers = new Map(), last = null, start = null, moved = 0, dragging = false, pinch = 0, hadMulti = false, pinchCenter = null;
+    const wrapAngle = a => Math.atan2(Math.sin(a), Math.cos(a));
     canvas.onpointerdown = e => { stopGlide(false); try {
         canvas.setPointerCapture(e.pointerId);
     }
     catch (error) { } /* synthetic / already-released pointers cannot be captured */ if (pointers.size === 0) {
+        if (surgeonChosen) animationToken++;
         hadMulti = false;
         dragging = false;
         moved = 0;
         start = [e.clientX, e.clientY];
+        markInteraction();
     } pointers.set(e.pointerId, [e.clientX, e.clientY]); if (pointers.size > 1) {
         hadMulti = true;
         dragging = true;
@@ -1729,7 +1778,6 @@ if(uSelected>.5)c=mix(c,vec3(.66,1.,.62),.50);if(uIsMarker>.5)c=mix(c,uColor.rgb
         const p = [...pointers.values()];
         pinch = Math.hypot(p[0][0] - p[1][0], p[0][1] - p[1][1]);
         pinchCenter = [(p[0][0] + p[1][0]) / 2, (p[0][1] + p[1][1]) / 2];
-        twist = pairAngle(p);
     } };
     canvas.onpointermove = e => { if (!pointers.has(e.pointerId))
         return; if (!last) {
@@ -1751,10 +1799,6 @@ if(uSelected>.5)c=mix(c,vec3(.66,1.,.62),.50);if(uIsMarker>.5)c=mix(c,uColor.rgb
         }
         pinchCenter = center;
         pinch = d;
-        const angle = pairAngle(p);
-        if (twist !== null)
-            rollView(-wrapAngle(angle - twist));
-        twist = angle;
     }
     else if (e.shiftKey || e.buttons === 2) {
         markInteraction();
@@ -1770,7 +1814,7 @@ if(uSelected>.5)c=mix(c,vec3(.66,1.,.62),.50);if(uIsMarker>.5)c=mix(c,uColor.rgb
     else {
         markInteraction(); orbitByDrag(dx, dy);
     } last = [e.clientX, e.clientY]; render(false); };
-    canvas.onpointerup = e => { pointers.delete(e.pointerId); twist = null; if (!dragging && available && !hadMulti) {
+    canvas.onpointerup = e => { pointers.delete(e.pointerId); if (!dragging && available && !hadMulti) {
         draw(true);
         cacheLabelVisibility();
         const r = canvas.getBoundingClientRect(), id = pickIdAt(e.clientX - r.left, e.clientY - r.top);
@@ -1778,28 +1822,40 @@ if(uSelected>.5)c=mix(c,vec3(.66,1.,.62),.50);if(uIsMarker>.5)c=mix(c,uColor.rgb
         render();
     } last = null; if (!pointers.size && interactionActive)
         markInteraction(); };
-    canvas.onpointercancel = e => { pointers.delete(e.pointerId); last = null; twist = null; if (!pointers.size && interactionActive)
+    canvas.onpointercancel = e => { pointers.delete(e.pointerId); last = null; if (!pointers.size && interactionActive)
         markInteraction(); };
+    canvas.addEventListener('lostpointercapture', e => {
+        if (pointers.has(e.pointerId))
+            canvas.onpointercancel(e);
+    });
+    window.addEventListener('blur', () => {
+        pointers.clear();
+        last = null;
+        if (interactionActive)
+            markInteraction();
+    });
     canvas.oncontextmenu = e => e.preventDefault();
     canvas.addEventListener('wheel', e => { e.preventDefault(); stopGlide(false); markInteraction(); const delta = e.deltaY * (e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? host.clientHeight : 1); zoomBy(Math.exp(-delta * .0015), false); }, { passive: false });
     canvas.onkeydown = e => { if (e.key === 'Escape') {
         clearSelection();
         return;
-    } if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', '+', '-', '=', 'Home', 'q', 'Q', 'e', 'E'].includes(e.key)) {
+    } const key = e.code === 'KeyQ' ? 'q' : e.code === 'KeyE' ? 'e' : e.key.toLowerCase();
+    if (['arrowleft', 'arrowright', 'arrowup', 'arrowdown', '+', '-', '=', 'home'].includes(key) ||
+        e.altKey && ['q', 'e'].includes(key)) {
         e.preventDefault();
         stopGlide();
-        // Arrows turn about the screen axes (same steps as before, now unclamped); Q/E roll.
+        // Arrow keys orbit. Alt/Option + Q/E rolls.
         if (e.key === 'ArrowLeft')
-            rotateByDrag(-.13, 0, 1);
+            orbitByDrag(-.13, 0, 1);
         if (e.key === 'ArrowRight')
-            rotateByDrag(.13, 0, 1);
+            orbitByDrag(.13, 0, 1);
         if (e.key === 'ArrowUp')
-            rotateByDrag(0, .1, 1);
+            orbitByDrag(0, .1, 1);
         if (e.key === 'ArrowDown')
-            rotateByDrag(0, -.1, 1);
-        if (e.key === 'q' || e.key === 'Q')
+            orbitByDrag(0, -.1, 1);
+        if (key === 'q')
             rollView(.1);
-        if (e.key === 'e' || e.key === 'E')
+        if (key === 'e')
             rollView(-.1);
         if (['+', '='].includes(e.key))
             zoomBy(1.15);
