@@ -35,7 +35,8 @@
     "README.md",
     "assets/app.js",
     "data/manifest.json",
-    "index.html"
+    "index.html",
+    "tools/anatomy_build/blender_export.py"
   ],
   "localChanges": [
     "Remove the dedicated Operative View button, handler, QA export and stale step note.",
@@ -46,8 +47,11 @@
     "Measure the drag threshold from pointerdown displacement rather than accumulating oscillating hand jitter; never select after a completed drag returns to its start.",
     "Ignore pointer movement until a 5 CSS-pixel drag threshold is crossed to filter press jitter.",
     "Discard pending pick work at drag start and suppress picking-buffer render and synchronous pixel readback during active movement, including pose-animation redraws.",
-    "Render active pointer frames at device-pixel ratio 1 with reduced procedural-noise quality; restore full display quality and picking after 140 ms idle while keeping click picking immediate.",
-    "Update accessible gesture instructions, reference documentation and interaction regression checks."
+    "Update accessible gesture instructions, reference documentation and interaction regression checks.",
+    "Keep canvas resolution and shader quality steady during pointer motion. Defer picking until release or cancellation.",
+    "Use consistent room and head orbit bases, preserve explicit Alt/Option roll across orbit, and pause scene playback when selecting or inspecting Surgeon’s View.",
+    "Apply optional per-step mesh visibility rules consistently to rendering, picking, labels and capture.",
+    "Correct reflected winding in the optional Blender export."
   ],
-  "geometry": "All six anatomy chunks, material/deformation shaders, CSS, loader and anatomy build modules are unchanged from upstream."
+  "geometry": "All six anatomy chunks, material and deformation shaders, CSS and loader remain byte-identical to the upstream reference. Optional Blender export corrects reflected winding."
 }

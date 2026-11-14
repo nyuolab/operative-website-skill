@@ -61,9 +61,12 @@ def mesh_triangles(ob, evaluated: bool = False):
         vs = list(p.vertices)
         for k in range(1, len(vs) - 1):
             tris.append((vs[0], vs[k], vs[k + 1]))
+    faces = np.array(tris, dtype=np.int64).reshape(-1, 3)
+    if mw.to_3x3().determinant() < 0:
+        faces = faces[:, [0, 2, 1]]
     if evaluated:
         ob_eval.to_mesh_clear()
-    return to_display(co), np.array(tris, dtype=np.int64)
+    return to_display(co), faces
 
 
 def record_positions(m: dict) -> np.ndarray:

@@ -32,7 +32,7 @@ def main():
     manifest = json.loads((source / 'data/manifest.json').read_text())
     if not isinstance(meshes, list) or len(meshes) != manifest['structure_count']:
         raise SystemExit('Retained anatomy and manifest counts disagree.')
-    payloads = {'mesh-data': meshes, 'manifest-data': manifest}
+    payloads = {'mesh-data': meshes, 'manifest-data': manifest, 'clearance-data': {}}
     runtime = (source / 'assets/app.js').read_text()
     old = 'const { meshes, manifest } = window.__PTERIONAL_DATA__;'
     new = "const guideData = window.__GUIDE_DATA__;\n    const meshes = guideData?.['mesh-data'] ?? JSON.parse($('#mesh-data').textContent);\n    const manifest = guideData?.['manifest-data'] ?? JSON.parse($('#manifest-data').textContent);"
