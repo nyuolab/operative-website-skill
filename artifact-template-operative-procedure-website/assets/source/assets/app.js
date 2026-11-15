@@ -28,9 +28,9 @@
     const allEnabled = Object.fromEntries(Object.keys(enabled).map(k => [k, false]));
     const canvas = $('#canvas'), host = $('#viewport');
     // Midpoint of the native cranial vault bounds, shared by every camera preset.
-    const anatomyCenter = [0, -.35, -.41];
+    const anatomyCenter = Object.freeze([0, -.35, -.41]);
     // Camera state: viewQ/camFrame are described with the orientation helpers below; distance, pan (screen
-    // space, after rotation) and viewZoom keep their original meaning.
+    // space, before projection) and viewZoom follow Pterional PR #1.
     let gl = null, program = null, uniforms = {}, buffer = null, available = false, viewQ = qFromAngles(1.0, .25, 0), camFrame = 'head', distance = 15, pan = [0, 0], aspect = 1, scheduled = false, pickDirty = true, interactionActive = false, interactionTimer = 0;
     const scale = 2.05, LINE_MIN_HALF_PX = 1.3, LINE_NUDGE = .03;
     const configs = [];
@@ -146,89 +146,45 @@
         return viewCache;
     }
     let camGlide = null;
-    // Map the preset's up direction to the orbit controller's +Y axis.
-    let orbitBasis = [0, 0, 0, 1], screenPlaneOrbit = false;
-    function orbitBasisFor(up) {
-        if (!up) return [0, 0, 0, 1];
-        const y = vNorm(up);
-        const axis = Math.abs(y[2]) < .9 ? [0, 0, 1] : [0, 1, 0];
-        return qLook(vSub(axis, vScale(y, vDot(y, axis))), y);
-    }
-    // Re-express the orientation in another frame at the currently displayed pose.
+    // Change the orientation frame while keeping the model-space pivot fixed.
     function attachCamera(frame) {
         if (frame === camFrame) return;
-        const Pq = matQ(poseR);
-        const convert = q => qNorm(qMul(q, frame === 'world' ? qConj(Pq) : Pq));
+        const pose = matQ(poseR);
+        const convert = q => qNorm(qMul(q, frame === 'world' ? qConj(pose) : pose));
         viewQ = convert(viewQ);
-        orbitBasis = convert(orbitBasis);
         if (camGlide) {
-            for (const pose of [camGlide.from, camGlide.to]) {
-                pose.q = convert(pose.q);
-                pose.orbitBasis = convert(pose.orbitBasis);
-            }
+            camGlide.from.q = convert(camGlide.from.q);
+            camGlide.to.q = convert(camGlide.to.q);
         }
         camFrame = frame;
         viewChanged();
     }
-    function orientCamera(v) {
-        screenPlaneOrbit = v.screenPlaneOrbit ?? false;
-        if (v.q) {
-            viewQ = qNorm(v.q);
-            if (v.orbitBasis) orbitBasis = qNorm(v.orbitBasis);
-            else if (v.up) orbitBasis = orbitBasisFor(v.up);
-        } else {
-            viewQ = v.eye ? qLook(v.eye, v.up || [0, 1, 0]) : qFromAngles(v.yaw, v.pitch || 0, v.roll || 0);
-            orbitBasis = orbitBasisFor(v.eye ? v.up : null);
-        }
-    }
+
     function applyCamera(v) {
-        camFrame = v.frame || 'head';
-        orientCamera(v);
+        if (v.frame) attachCamera(v.frame);
+        if (v.q) viewQ = qNorm(v.q);
+        else if (v.eye) viewQ = qLook(v.eye, v.up || [0, 1, 0]);
+        else if (v.yaw != null) viewQ = qFromAngles(v.yaw, v.pitch || 0, v.roll || 0);
         if (v.distance != null) distance = v.distance;
         if (v.zoom != null) viewZoom = v.zoom;
+        pan = [0, 0];
         viewChanged();
     }
-    // Explicit camera selections survive the automatic Position demonstration.
+
+    // Route explicit presets through the same centered camera as Reset and Recommended.
     function setCamera(v = {}) {
         stopGlide();
         cameraExplicit = true;
-        if (v.frame && v.frame !== camFrame) attachCamera(v.frame);
-        if (v.q || v.eye || v.yaw != null) orientCamera(v);
-        if (v.distance != null) distance = v.distance;
-        if (v.zoom != null) viewZoom = v.zoom;
-        if (v.pan) pan = [...v.pan];
-        viewChanged();
+        applyCamera(v);
         render();
     }
-    // Keep the signed elevation across input events. Deriving it from asin on
-    // each move would fold it back at the poles and reverse the drag direction.
-    let orbit = null;
-    function rotateByDrag(dx, dy, k = .008) {
-        if (!dx && !dy) return;
-        if (screenPlaneOrbit) {
-            // Orbit about axes in the image plane. A preset-up yaw would
-            // also twist around the sightline when looking steeply down.
-            const turn = qAxis([dy, dx, 0], Math.hypot(dx, dy) * k);
-            viewQ = qNorm(qMul(turn, viewQ));
-            viewChanged();
-            return;
-        }
-        if (orbit?.q !== viewQ) {
-            const relativeView = qMul(viewQ, qConj(orbitBasis));
-            const M = qMat(relativeView);
-            const yaw = Math.hypot(M[6], M[8]) > 1e-8 ? Math.atan2(-M[6], M[8]) : Math.atan2(M[2], M[0]);
-            const pitch = Math.asin(Math.max(-1, Math.min(1, M[7])));
-            orbit = { yaw, pitch, roll: qMul(relativeView, qConj(qFromAngles(yaw, pitch))) };
-        }
-        orbit.yaw = wrapAngle(orbit.yaw + dx * k);
-        orbit.pitch = wrapAngle(orbit.pitch + dy * k);
-        const relativeView = qMul(orbit.roll, qFromAngles(orbit.yaw, orbit.pitch));
-        viewQ = orbit.q = qNorm(qMul(relativeView, orbitBasis));
-        viewChanged();
-    }
+
+    // Apply PR #1's incremental trackball in the screen plane for every view.
+    function rotateByDrag(dx, dy, k = .008) { const len = Math.hypot(dx, dy); if (!len)
+        return; viewQ = qNorm(qMul(qAxis([dy, dx, 0], len * k), viewQ)); viewChanged(); }
     function markInteraction() { interactionActive = true; pickDirty = false; clearTimeout(interactionTimer); interactionTimer = setTimeout(() => { if (pointers.size)
         return; interactionActive = false; render(true); }, 140); }
-    // Camera glide: slerp the orientation and ease distance, pan and zoom to a preset (same frame) over
+    // Camera glide: slerp the orientation and ease distance and zoom to a preset (same frame) over
     // `duration` ms, timed by poseClock like the pose blend. Used when the 'position' step frames the room; any user
     // camera input or preset cancels it (stopGlide). Study-plate captures ignore it.
     function qSlerp(a, b, t) { let d = a[0] * b[0] + a[1] * b[1] + a[2] * b[2] + a[3] * b[3]; if (d < 0) {
@@ -236,14 +192,13 @@
         d = -d;
     } if (d > .9995)
         return qNorm(a.map((x, i) => x + (b[i] - x) * t)); const th = Math.acos(d), sa = Math.sin((1 - t) * th) / Math.sin(th), sb = Math.sin(t * th) / Math.sin(th); return a.map((x, i) => x * sa + b[i] * sb); }
-    function glideCamera(v, duration = 1000) { attachCamera(v.frame || 'head'); const from = { q: viewQ, orbitBasis, distance, pan: [...pan], zoom: viewZoom }; applyCamera(v); const to = { q: viewQ, orbitBasis, distance, pan: [0, 0], zoom: v.zoom ?? 1 }; if (matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    function glideCamera(v, duration = 1000) { attachCamera(v.frame || 'head'); const from = { q: viewQ, distance, zoom: viewZoom }; applyCamera(v); const to = { q: viewQ, distance, zoom: v.zoom ?? 1 }; if (matchMedia('(prefers-reduced-motion: reduce)').matches) {
         pan = [0, 0];
         viewZoom = to.zoom;
         camGlide = null;
     }
     else {
         viewQ = from.q;
-        orbitBasis = from.orbitBasis;
         distance = from.distance;
         viewZoom = from.zoom;
         camGlide = { from, to, start: performance.now(), duration };
@@ -254,21 +209,12 @@
     function stopGlide(user = true) { camGlide = null; if (user)
         roomCameraAuto = false; }
     function updateGlide() { if (!camGlide || capturing)
-        return; const { from, to } = camGlide, t = Math.max(0, Math.min(1, (poseClock - camGlide.start) / camGlide.duration)), e = smoothstep01(t), mix = (a, b) => a + (b - a) * e; viewQ = qSlerp(from.q, to.q, e); orbitBasis = qSlerp(from.orbitBasis, to.orbitBasis, e); distance = mix(from.distance, to.distance); pan = from.pan.map((x, i) => mix(x, to.pan[i])); viewZoom = mix(from.zoom, to.zoom); viewChanged(); if (t >= 1)
+        return; const { from, to } = camGlide, t = Math.max(0, Math.min(1, (poseClock - camGlide.start) / camGlide.duration)), e = smoothstep01(t), mix = (a, b) => a + (b - a) * e; viewQ = qSlerp(from.q, to.q, e); distance = mix(from.distance, to.distance); viewZoom = mix(from.zoom, to.zoom); viewChanged(); if (t >= 1)
         camGlide = null;
     else
         render(); }
     // Roll about the line of sight; a positive angle turns the image counter-clockwise.
-    function rollView(angle) {
-        const delta = qAxis([0, 0, 1], angle);
-        const continuingOrbit = orbit?.q === viewQ;
-        viewQ = qNorm(qMul(delta, viewQ));
-        if (continuingOrbit) {
-            orbit.roll = qNorm(qMul(delta, orbit.roll));
-            orbit.q = viewQ;
-        }
-        viewChanged();
-    }
+    function rollView(angle) { viewQ = qNorm(qMul(qAxis([0, 0, 1], angle), viewQ)); viewChanged(); }
     function meshSide(m) { if (m.procedureSide)
         return m.procedureSide; if (m.nativeName.endsWith('.l'))
         return 'left'; if (m.nativeName.endsWith('.r'))
@@ -367,7 +313,7 @@
         playStepAnimation();
         render();
     } updateChangeControls(); }
-    $('#mode3d').onclick = () => setMode('3d');
+    $('#mode3d').onclick = () => { stopGlide(); pan = [0, 0]; setMode('3d'); };
     $('#mode2d').onclick = () => setMode('2d');
     $('#creditsOpen').onclick = () => $('#credits').showModal();
     $('#creditsClose').onclick = () => $('#credits').close();
@@ -455,7 +401,7 @@
     $('#paperSearch').oninput = renderPapers;
     function openPaper(id) { setTab('papers'); $('#paperSearch').value = ''; renderPapers(); $('#paper-' + id)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }
     function captureStepImages() { if (!available || typeof canvas.toDataURL !== 'function')
-        return manifest.study_plates || []; const saved = { viewQ, orbitBasis, screenPlaneOrbit, camFrame, poseOverride, distance, viewZoom, pan: [...pan], selected, opening, procedure, contextSide, separateLayers, enabled: { ...enabled }, allEnabled: { ...allEnabled }, beforeCurrent, regionalContext, hidden: meshes.map(m => m.hidden) }; const s = steps[stage], vside = stepView(s), images = []; capturing = true; try {
+        return manifest.study_plates || []; const saved = { viewQ, camFrame, poseOverride, distance, viewZoom, pan: [...pan], selected, opening, procedure, contextSide, separateLayers, enabled: { ...enabled }, allEnabled: { ...allEnabled }, beforeCurrent, regionalContext, hidden: meshes.map(m => m.hidden) }; const s = steps[stage], vside = stepView(s), images = []; capturing = true; try {
         viewZoom = 1;
         regionalContext = saved.regionalContext;
         selected = -1;
@@ -485,8 +431,6 @@
     }
     finally {
         viewQ = saved.viewQ;
-        orbitBasis = saved.orbitBasis;
-        screenPlaneOrbit = saved.screenPlaneOrbit;
         camFrame = saved.camFrame;
         poseOverride = saved.poseOverride;
         distance = saved.distance;
@@ -585,7 +529,7 @@
         for (const k in allEnabled)
             allEnabled[k] = false;
         stopGlide();
-        applyCamera(stepView(s)); // head-framed, or world-framed for the 'position' step
+        applyCamera({ frame: 'head', ...stepView(s) }); // head-framed, or world-framed for the 'position' step
         pan = [0, 0];
     } $('#presetname').textContent = titleCase(s.title); syncControls(); clearSelection(); playStepAnimation(); updateChangeControls(); render(); }
     let activeStepId = null;
@@ -726,14 +670,9 @@
     // Model point -> view space (JS mirror of the vertex shader: p = uView * (q - uTarget)).
     function transform(p) { const { M, target: t } = viewBasis(); return mApply(M, [p[0] - t[0], p[1] - t[1], p[2] - t[2]]); }
     // Eye position in the canonical (operative-side = right) model frame used by the fragment shader (vOriginal).
-    function cameraPosition() { const { M, target: t } = viewBasis(); return canonicalPoint(vAdd(t, mApply(mT(M), [0, 0, distance]))); }
-    // Pan is a screen offset in CSS pixels, shared by drawing, picking and labels.
-    function project(p) {
-        const t = transform(p), magnification = scale * viewZoom / (distance - t[2]);
-        const x = (1 + t[0] * magnification / aspect) * host.clientWidth / 2;
-        const y = (1 - t[1] * magnification) * host.clientHeight / 2;
-        return [x + pan[0], y + pan[1]];
-    }
+    function cameraPosition() { const { M, target: t } = viewBasis(); return canonicalPoint(vAdd(t, mApply(mT(M), [-pan[0], -pan[1], distance]))); }
+    // Match the shader projection, including PR #1 view-space pan.
+    function project(p) { const t = transform(p), w = distance - t[2]; return [(t[0] + pan[0]) * scale * viewZoom / aspect / w * host.clientWidth / 2 + host.clientWidth / 2, host.clientHeight / 2 - (t[1] + pan[1]) * scale * viewZoom / w * host.clientHeight / 2]; }
     const smoothstep01 = t => t * t * (3 - 2 * t);
     // ---- Soft-tissue curl / peel ------------------------------------------------------------------------------------
     // Flaps fold by the FLAP CONTRACT shared with the data build (record.flap = {key, pivot, axis, away, lift, radius,
@@ -1289,13 +1228,13 @@
         svg.append(line);
     } }
     function setView(v) {
-        const views = { anterior: [0, 0], right: [Math.PI / 2, 0], left: [-Math.PI / 2, 0], superior: [0, 1.5] };
+        const views = { anterior: [0, 0], right: [Math.PI / 2, 0], left: [-Math.PI / 2, 0], posterior: [Math.PI, 0], superior: [0, 1.5] };
         if (!views[v]) return;
-        setCamera({ frame: 'head', yaw: views[v][0], pitch: views[v][1], pan: [0, 0] });
+        setCamera({ frame: 'head', yaw: views[v][0], pitch: views[v][1] });
     }
-    // Move to the surgeon camera position and keep the user’s pan and lens zoom.
+    // Center the anatomy at the surgeon preset’s orientation and magnification.
     function setSurgeonView() {
-        setCamera({ frame: 'world', eye: [-.3 * sideSign(), .62, .72], up: [0, 0, 1], distance: 14, screenPlaneOrbit: true });
+        setCamera({ frame: 'world', eye: [-.3 * sideSign(), .62, .72], up: [0, 0, 1], distance: 14, zoom: 1 });
     }
     // ---- Patient Position controls (Layers & View panel) -------------------------------------------------------------
     // Changing the pose re-attaches the camera to the room first (same image), so the head visibly turns while the
@@ -1319,8 +1258,8 @@
         } syncPoseControls(); render(); }
     // 'anatomical' | 'operative' override the step until the next step change; null follows the step again.
     function setPoseMode(next) { if (!['anatomical', 'operative', null].includes(next))
-        return; attachCamera('world'); startPoseBlend(); poseOverride = next; syncPoseControls(); render(); }
-    function resetPose() { attachCamera('world'); startPoseBlend(); poseSettings = { ...POSE_DEFAULT }; syncPoseControls(); render(); }
+        return; stopGlide(false); pan = [0, 0]; attachCamera('world'); startPoseBlend(); poseOverride = next; syncPoseControls(); render(); }
+    function resetPose() { stopGlide(false); pan = [0, 0]; attachCamera('world'); startPoseBlend(); poseSettings = { ...POSE_DEFAULT }; syncPoseControls(); render(); }
     let poseUiKey = '';
     function syncPoseControls() { if (!$('#positionControls'))
         return; const operative = poseFraction() >= .5, key = POSE_KEYS.map(k => poseSettings[k]).join() + operative + propsOn + camFrame; if (key === poseUiKey)
@@ -1481,7 +1420,7 @@ q+=uOffset;
 // View: uView = head(model)->view rotation (camera orientation x head pose), uTarget = orbit centre in model space.
 // q/norm are model-space (after flap motion); deformations belong above this line. uGravity (unit, model space) is
 // provided for later gravity-driven deformation and is optimised away while unused.
-if(uLine>0.){float w0=uDistance-(uView*(q-uTarget)).z;q+=norm*max(0.,w0*uLinePx-uLine);}vec3 p=uView*(q-uTarget);vNormal=uView*norm;vObjN=vec3(aNormal.x*uSide,aNormal.yz)/max(vAO,1e-4);float w=uDistance-p.z;vEye=vec3(-p.x,-p.y,w);float wz=uLine>0.?max(w-uLineNudge,.05):w;gl_Position=vec4(p.x*uScale/uAspect+uPan.x*w,p.y*uScale+uPan.y*w,(1.0125786-1.0062893/wz)*w,w);}`));
+if(uLine>0.){float w0=uDistance-(uView*(q-uTarget)).z;q+=norm*max(0.,w0*uLinePx-uLine);}vec3 p=uView*(q-uTarget);vNormal=uView*norm;vObjN=vec3(aNormal.x*uSide,aNormal.yz)/max(vAO,1e-4);float w=uDistance-p.z;vEye=vec3(-(p.x+uPan.x),-(p.y+uPan.y),w);float wz=uLine>0.?max(w-uLineNudge,.05):w;gl_Position=vec4((p.x+uPan.x)*uScale/uAspect,(p.y+uPan.y)*uScale,(1.0125786-1.0062893/wz)*w,w);}`));
         gl.attachShader(program, shader(gl.FRAGMENT_SHADER, `#ifdef GL_FRAGMENT_PRECISION_HIGH
 precision highp float;
 #else
@@ -1589,7 +1528,7 @@ if(uSelected>.5)c=mix(c,vec3(.66,1.,.62),.50);if(uIsMarker>.5)c=mix(c,uColor.rgb
         available = true;
         window.guideQA = { solidDepth: true, zoomBy, syncMobileLayout, alignActiveStep, updateMobileReaderHeight, changeKind, procedureLabelRegion, activeLabelMesh, fixedLabelRect, visible, indicationGroups, chooseIndication, setProcedureSide, operativeSide, sideSign, canonicalPoint, onOperativeSide, relevantMesh, stepView, baseId, meshSide, meshOffset, scanPickAnchors, pickIdAt, meshCount: meshes.length, vertexCount, draw, activate, choose, configs, select, setTab, setView, enabled, allEnabled, getMeshes: () => meshes.map(({ data, vertexData, procedureCandidates, fissureCache, ...m }) => m), visibleCount: () => meshes.filter(visible).length, getSteps: () => steps, getState: () => ({ palette, viewZoom, isMobile, config: { ...config }, model: modelIndex() + 1, stage, mode, selected, contextAlpha, contextSide, prelabelsOn, opening, beforeCurrent, regionalContext, instrumentsOn, separateLayers, ...cameraState(), distance, pan: [...pan], enabled: { ...enabled }, allEnabled: { ...allEnabled } }), surgicalState, setPalette, opacity, refreshLabels: updateStepLabels,
             // Camera / head-pose API (see the orientation and head-positioning blocks near the top of this file).
-            getCamera: () => ({ q: [...viewQ], orbitBasis: [...orbitBasis], screenPlaneOrbit, frame: camFrame, target: camFrame === 'world' ? posePoint(anatomyCenter) : [...anatomyCenter], distance, pan: [...pan], viewZoom }), setCamera, rotateByDrag: (dx, dy) => { stopGlide(); rotateByDrag(dx, dy); render(); }, rollView: a => { stopGlide(); rollView(a); render(); }, attachCamera: f => { attachCamera(f); render(); }, viewBasis: () => ({ M: [...viewBasis().M], target: [...viewBasis().target] }), project, transform, pickAt: (x, y) => { draw(true); cacheLabelVisibility(); const id = pickIdAt(x, y); draw(); return id; }, setSurgeonView,
+            getCamera: () => ({ q: [...viewQ], frame: camFrame, target: camFrame === 'world' ? posePoint(anatomyCenter) : [...anatomyCenter], distance, pan: [...pan], viewZoom }), setCamera, rotateByDrag: (dx, dy) => { stopGlide(); rotateByDrag(dx, dy); render(); }, rollView: a => { stopGlide(); rollView(a); render(); }, attachCamera: f => { attachCamera(f); render(); }, viewBasis: () => ({ M: [...viewBasis().M], target: [...viewBasis().target] }), project, transform, pickAt: (x, y) => { draw(true); cacheLabelVisibility(); const id = pickIdAt(x, y); draw(); return id; }, setSurgeonView,
             getPose: poseState, setPose, setPoseMode, resetPose, gravityInModel, posePoint, poseInverse, posePivot: [...POSE_PIVOT], poseDefault: { ...POSE_DEFAULT },
             // Soft-tissue deformation (curl / peel, incision parting, two-pass regions); see the curl block above.
             stateProgress, movePoint: (i, p) => movePoint(meshes[i], p), getDeformation: i => { const d = deformation(meshes[i]); return d && { curl: d.curl && { key: d.curl.mo.key, progress: d.curl.P, hingeTravel: d.curl.dh, angle: d.curl.T, radius: d.curl.mo.R, dmax: d.curl.mo.dmax }, split: d.split && { kind: d.split.kind, margin: d.split.margin, plane: d.split.plane }, part: d.part && { reveal: d.part.reveal, gap: d.part.gap, sign: d.part.sign }, groove: d.groove, leafCut: !!d.leafCut }; }, curlTuning: CURL_TUNING, variantSnapshot };
@@ -1680,8 +1619,7 @@ if(uSelected>.5)c=mix(c,vec3(.66,1.,.62),.50);if(uIsMarker>.5)c=mix(c,uColor.rgb
         gl.uniform1f(uniforms.Aspect, aspect);
         gl.uniform1f(uniforms.Scale, scale * viewZoom); gl.uniform1f(uniforms.LinePx, 2 * LINE_MIN_HALF_PX / (scale * viewZoom * gl.drawingBufferHeight)); gl.uniform1f(uniforms.LineNudge, LINE_NUDGE);
         // Scale by w in the vertex shader so the offset is uniform after perspective division.
-        gl.uniform2f(uniforms.Pan, 2 * pan[0] / Math.max(1, host.clientWidth),
-            -2 * pan[1] / Math.max(1, host.clientHeight));
+        gl.uniform2fv(uniforms.Pan, pan);
         gl.uniform3fv(uniforms.Target, viewBasis().target);
         gl.uniform1f(uniforms.Pick, picking ? 1 : 0);
         gl.uniform1f(uniforms.Surgical, palette === 'surgical' ? 1 : 0);
@@ -1798,113 +1736,139 @@ if(uSelected>.5)c=mix(c,vec3(.66,1.,.62),.50);if(uIsMarker>.5)c=mix(c,uColor.rgb
         if (pickDirty) { pickDirty = false; draw(true); cacheLabelVisibility(); }
         draw();
     } }); }
-    // One pointer orbits upright by default and rolls with Alt/Option held.
-    // Shift/right-drag pans; two pointers pan and pinch.
-    let pointers = new Map(), last = null, start = null, moved = 0, dragging = false, pinch = 0, hadMulti = false, pinchCenter = null;
-    const wrapAngle = a => Math.atan2(Math.sin(a), Math.cos(a));
-    canvas.onpointerdown = e => { stopGlide(false); try {
-        canvas.setPointerCapture(e.pointerId);
+    // Pterional PR #1 trackball, pan, pinch, twist and keyboard gestures.
+    const pointers = new Map();
+    let dragging = false, press = null;
+    const wrapAngle = angle => Math.atan2(Math.sin(angle), Math.cos(angle));
+
+    function touchPair() {
+        const [a, b] = pointers.values();
+        const dx = b[0] - a[0], dy = b[1] - a[1];
+        return {
+            center: [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2],
+            distance: Math.hypot(dx, dy),
+            angle: Math.atan2(dy, dx)
+        };
     }
-    catch (error) { } /* synthetic / already-released pointers cannot be captured */ if (pointers.size === 0) {
-        hadMulti = false;
-        dragging = false;
-        moved = 0;
-        start = [e.clientX, e.clientY];
-        markInteraction();
-    } pointers.set(e.pointerId, [e.clientX, e.clientY]); if (pointers.size > 1) {
-        hadMulti = true;
-        dragging = true;
-    } last = [e.clientX, e.clientY]; if (pointers.size === 2) {
-        const p = [...pointers.values()];
-        pinch = Math.hypot(p[0][0] - p[1][0], p[0][1] - p[1][1]);
-        pinchCenter = [(p[0][0] + p[1][0]) / 2, (p[0][1] + p[1][1]) / 2];
-    } };
-    canvas.onpointermove = e => { if (!pointers.has(e.pointerId))
-        return; if (!last) {
-        last = [e.clientX, e.clientY];
-        return;
-    } const dx = e.clientX - last[0], dy = e.clientY - last[1]; moved = start ? Math.hypot(e.clientX - start[0], e.clientY - start[1]) : moved; if (dx || dy)
-        stopGlide(moved >= 5 || pointers.size > 1); pointers.set(e.pointerId, [e.clientX, e.clientY]); if (pointers.size === 1 && !dragging && moved < 5) {
-        last = [e.clientX, e.clientY];
-        return;
-    } dragging = true; if (pointers.size === 2) {
-        const p = [...pointers.values()], d = Math.hypot(p[0][0] - p[1][0], p[0][1] - p[1][1]);
-        markInteraction();
-        if (pinch > 0 && d > 0)
-            zoomBy(d / pinch, false);
-        const center = [(p[0][0] + p[1][0]) / 2, (p[0][1] + p[1][1]) / 2];
-        if (pinchCenter) {
-            pan[0] += center[0] - pinchCenter[0];
-            pan[1] += center[1] - pinchCenter[1];
+
+    function panBy(dx, dy) {
+        const unit = 2 * distance / (scale * viewZoom * Math.max(1, host.clientHeight));
+        pan[0] += dx * unit;
+        pan[1] -= dy * unit;
+    }
+
+    canvas.onpointerdown = e => {
+        if (e.button !== 0 && e.button !== 2) return;
+        stopGlide(false);
+        try {
+            canvas.setPointerCapture(e.pointerId);
+        } catch {
+            // Synthetic or already released pointers cannot be captured.
         }
-        pinchCenter = center;
-        pinch = d;
-    }
-    else if (e.shiftKey || (e.buttons & 2)) {
+        const point = [e.clientX, e.clientY];
+        if (!pointers.size) {
+            press = point;
+            dragging = false;
+        } else {
+            dragging = true;
+        }
+        pointers.set(e.pointerId, point);
         markInteraction();
-        pan[0] += dx;
-        pan[1] += dy;
-    }
-    else if (e.altKey) {
-        const r = canvas.getBoundingClientRect(), cx = r.left + r.width / 2 + pan[0], cy = r.top + r.height / 2 + pan[1];
-        const angle = (x, y) => Math.atan2(y - cy, x - cx);
-        markInteraction(); rollView(-wrapAngle(angle(e.clientX, e.clientY) - angle(last[0], last[1])));
-    }
-    else {
-        markInteraction(); rotateByDrag(dx, dy);
-    } last = [e.clientX, e.clientY]; render(false); };
-    canvas.onpointerup = e => { pointers.delete(e.pointerId); if (!dragging && available && !hadMulti) {
-        draw(true);
-        cacheLabelVisibility();
-        const r = canvas.getBoundingClientRect(), id = pickIdAt(e.clientX - r.left, e.clientY - r.top);
-        select(id);
-        render();
-    } last = null; if (!pointers.size && interactionActive)
-        markInteraction(); };
+    };
+
+    canvas.onpointermove = e => {
+        const previous = pointers.get(e.pointerId);
+        if (!previous) return;
+        const point = [e.clientX, e.clientY];
+        const pair = pointers.size === 2 ? touchPair() : null;
+        pointers.set(e.pointerId, point);
+
+        const origin = dragging ? previous : press;
+        const dx = point[0] - origin[0], dy = point[1] - origin[1];
+        if (!dragging && Math.hypot(dx, dy) < 5) return;
+        if (pointers.size > 2 || (!pair && !dx && !dy)) return;
+        dragging = true;
+        stopGlide();
+        markInteraction();
+
+        if (pair) {
+            const next = touchPair();
+            if (pair.distance > 0 && next.distance > 0) {
+                zoomBy(next.distance / pair.distance, false);
+                rollView(-wrapAngle(next.angle - pair.angle));
+            }
+            panBy(next.center[0] - pair.center[0], next.center[1] - pair.center[1]);
+        } else if (e.shiftKey || (e.buttons & 2)) {
+            panBy(dx, dy);
+        } else if (e.altKey) {
+            const rect = canvas.getBoundingClientRect();
+            const [x, y] = project(anatomyCenter);
+            const angle = p => Math.atan2(p[1] - rect.top - y, p[0] - rect.left - x);
+            rollView(-wrapAngle(angle(point) - angle(origin)));
+        } else {
+            rotateByDrag(dx, dy);
+        }
+        render(false);
+    };
+
     function cancelPointer(e) {
-        if (!pointers.delete(e.pointerId)) return;
-        last = null;
-        if (!pointers.size && interactionActive) markInteraction();
+        if (pointers.delete(e.pointerId) && !pointers.size) markInteraction();
     }
+
+    canvas.onpointerup = e => {
+        if (!pointers.has(e.pointerId)) return;
+        const click = !dragging && e.button === 0 &&
+            Math.hypot(e.clientX - press[0], e.clientY - press[1]) < 5;
+        cancelPointer(e);
+        if (click && available) {
+            draw(true);
+            cacheLabelVisibility();
+            const rect = canvas.getBoundingClientRect();
+            select(pickIdAt(e.clientX - rect.left, e.clientY - rect.top));
+            render();
+        }
+    };
     canvas.onpointercancel = cancelPointer;
     canvas.addEventListener('lostpointercapture', cancelPointer);
     window.addEventListener('blur', () => {
         if (!pointers.size) return;
         pointers.clear();
-        last = null;
         markInteraction();
     });
     canvas.oncontextmenu = e => e.preventDefault();
-    canvas.addEventListener('wheel', e => { e.preventDefault(); stopGlide(false); markInteraction(); const delta = e.deltaY * (e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? host.clientHeight : 1); zoomBy(Math.exp(-delta * .0015), false); }, { passive: false });
-    canvas.onkeydown = e => { if (e.key === 'Escape') {
-        clearSelection();
-        return;
-    } const key = e.code === 'KeyQ' ? 'q' : e.code === 'KeyE' ? 'e' : e.key.toLowerCase();
-    if (['arrowleft', 'arrowright', 'arrowup', 'arrowdown', '+', '-', '=', 'home'].includes(key) ||
-        e.altKey && ['q', 'e'].includes(key)) {
+
+    canvas.addEventListener('wheel', e => {
+        e.preventDefault();
+        stopGlide(false);
+        markInteraction();
+        const delta = e.deltaY * (e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? host.clientHeight : 1);
+        zoomBy(Math.exp(-delta * .0015), false);
+    }, { passive: false });
+
+    canvas.onkeydown = e => {
+        if (e.key === 'Escape') {
+            clearSelection();
+            return;
+        }
+        const key = e.code === 'KeyQ' ? 'q' : e.code === 'KeyE' ? 'e' : e.key.toLowerCase();
+        const actions = {
+            arrowleft: () => rotateByDrag(-.13, 0, 1),
+            arrowright: () => rotateByDrag(.13, 0, 1),
+            arrowup: () => rotateByDrag(0, .1, 1),
+            arrowdown: () => rotateByDrag(0, -.1, 1),
+            q: () => rollView(.1),
+            e: () => rollView(-.1),
+            '+': () => zoomBy(1.15),
+            '=': () => zoomBy(1.15),
+            '-': () => zoomBy(1 / 1.15),
+            home: () => $('#resetView').click()
+        };
+        if (!Object.hasOwn(actions, key)) return;
         e.preventDefault();
         stopGlide();
-        // Arrow keys orbit. Alt/Option + Q/E rolls.
-        if (e.key === 'ArrowLeft')
-            rotateByDrag(-.13, 0, 1);
-        if (e.key === 'ArrowRight')
-            rotateByDrag(.13, 0, 1);
-        if (e.key === 'ArrowUp')
-            rotateByDrag(0, .1, 1);
-        if (e.key === 'ArrowDown')
-            rotateByDrag(0, -.1, 1);
-        if (key === 'q')
-            rollView(.1);
-        if (key === 'e')
-            rollView(-.1);
-        if (['+', '='].includes(e.key))
-            zoomBy(1.15);
-        if (e.key === '-')
-            zoomBy(1 / 1.15);
-        if (e.key === 'Home')
-            $('#resetView').click();
+        actions[key]();
         render();
-    } };
+    };
     canvas.addEventListener('webglcontextlost', e => { e.preventDefault(); available = false; $('#noGL').hidden = false; });
     canvas.addEventListener('webglcontextrestored', () => location.reload());
     new ResizeObserver(() => { updateMobilePanelHeight(); render(); }).observe(host);

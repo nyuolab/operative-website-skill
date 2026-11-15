@@ -22,7 +22,7 @@ The pterional reference contains 650 records and 12 configurations of 27 steps. 
 - Use full horizontal and vertical orbit for ordinary drag. Preserve separate Alt/Option roll, pan, pinch, zoom, keyboard controls and camera presets.
 - Improve interaction latency by discarding pending pick work as a drag begins and skipping picking renders and synchronous pixel readback during pointer movement, including redraws from simultaneous pose animation; refresh the picker and visibility labels after the gesture settles. Keep render resolution and shader quality steady throughout the gesture. Keep immediate click picking.
 - Ignore pointer movement until it exceeds a small drag threshold so pointer-down jitter does not move the view. Update visible gesture help, accessible canvas instructions and reference documentation to match. Preserve the remaining renderer, geometry, CSS and build modules exactly.
-- Keep camera rotation, pan, zoom, pointer lifecycle and keyboard handling aligned with the ACDF controller; do not fork procedure-specific drag math.
+- Use the original Pterional PR #1 gesture and projection math across all guides. Replace its moving targets with a fixed anatomy pivot and clear previous pan at each preset.
 
 ## Geometry rebuilding
 
