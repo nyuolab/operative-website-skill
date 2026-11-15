@@ -1,8 +1,10 @@
 (() => {
     'use strict';
     const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
-    const { meshes, manifest } = window.__PTERIONAL_DATA__;
-    const displayConflicts = window.__GUIDE_DATA__?.['clearance-data'] ??
+    const guideData = window.__GUIDE_DATA__;
+    const meshes = guideData?.['mesh-data'] ?? JSON.parse($('#mesh-data').textContent);
+    const manifest = guideData?.['manifest-data'] ?? JSON.parse($('#manifest-data').textContent);
+    const displayConflicts = guideData?.['clearance-data'] ??
         JSON.parse($('#clearance-data')?.textContent || '{}');
     const clearanceMeshById = new Map(meshes.map(mesh => [mesh.id, mesh]));
     const papers = manifest.papers;
@@ -38,9 +40,6 @@
         for (const m of ['subfascial', 'split'])
             for (const f of ['yes', 'no'])
                 configs.push({ clinoid: c, muscle: m, fissure: f });
-    const cname = c => ({ none: 'No clinoidectomy', extra: 'Extradural clinoidectomy', intra: 'Intradural clinoidectomy' }[c]);
-    const mname = m => m === 'split' ? 'Muscle-splitting' : 'Subfascial';
-    const configName = c => `${cname(c.clinoid)} · ${mname(c.muscle)} · ${c.fissure === 'yes' ? 'Split fissure' : 'No fissure split'}`;
     function operativeSide() { return contextSide === 'left' ? 'left' : 'right'; }
     function sideSign() { return operativeSide() === 'left' ? -1 : 1; }
     function canonicalPoint(p) { return [p[0] * sideSign(), p[1], p[2]]; }
@@ -399,7 +398,6 @@
         $('#papers').append(card);
     } $('#paperEmpty').hidden = count > 0; $('#paperCount').textContent = papers.length; }
     $('#paperSearch').oninput = renderPapers;
-    function openPaper(id) { setTab('papers'); $('#paperSearch').value = ''; renderPapers(); $('#paper-' + id)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }
     function captureStepImages() { if (!available || typeof canvas.toDataURL !== 'function')
         return manifest.study_plates || []; const saved = { viewQ, camFrame, poseOverride, distance, viewZoom, pan: [...pan], selected, opening, procedure, contextSide, separateLayers, enabled: { ...enabled }, allEnabled: { ...allEnabled }, beforeCurrent, regionalContext, hidden: meshes.map(m => m.hidden) }; const s = steps[stage], vside = stepView(s), images = []; capturing = true; try {
         viewZoom = 1;
@@ -510,7 +508,7 @@
     function rebuild({ reset = false } = {}) { animationToken++; const old = steps[stage]?.id; steps = buildSteps(); $('#steps').replaceChildren(); steps.forEach((s, i) => { const card = document.createElement('article'); card.className = 'step'; card.tabIndex = 0; card.innerHTML = `<div class="step-heading"><span class="step-number">${String(i + 1).padStart(2, '0')}</span><div class="step-heading-text"><h2>${escape(titleCase(s.title))}</h2></div></div><p>${escape(s.body)}</p>`; card.onclick = () => activate(i); card.onkeydown = e => { if (e.target === card && ['Enter', ' '].includes(e.key)) {
         e.preventDefault();
         activate(i);
-    } }; $('#steps').append(card); }); const index = modelIndex(); $('#conflict').hidden = !(config.clinoid === 'intra' && config.fissure === 'no'); $('#conflict').textContent = 'Evidence conflict: this intradural clinoidectomy source describes wide Sylvian splitting. This selectable combination is shown for comparison, but is not validated by the cited sequence.'; renderPapers(); renderIndications(); activate(reset ? 0 : Math.max(0, steps.findIndex(s => s.id === old))); $('#planLive').textContent = steps.length + ' guide steps. Configuration updated.'; }
+    } }; $('#steps').append(card); }); $('#conflict').hidden = !(config.clinoid === 'intra' && config.fissure === 'no'); $('#conflict').textContent = 'Evidence conflict: this intradural clinoidectomy source describes wide Sylvian splitting. This selectable combination is shown for comparison, but is not validated by the cited sequence.'; renderPapers(); renderIndications(); activate(reset ? 0 : Math.max(0, steps.findIndex(s => s.id === old))); $('#planLive').textContent = steps.length + ' guide steps. Configuration updated.'; }
     function choose(c) { config = { ...c }; for (const [k, v] of Object.entries(config))
         $(`input[name="${k}"][value="${v}"]`).checked = true; rebuild(); }
     // Static snapshot of the guide steps for all 12 configurations, as stored in data/manifest.json `variants`
@@ -566,7 +564,7 @@
         showDiagram();
     else
         render(); };
-    function playStepAnimation() { const token = ++animationToken; const s = steps[stage]; opening = 1; if (mode !== '3d' || !procedure || !hasStageChange() || matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    function playStepAnimation() { const token = ++animationToken; opening = 1; if (mode !== '3d' || !procedure || !hasStageChange() || matchMedia('(prefers-reduced-motion: reduce)').matches) {
         $('#opening').value = 100;
         $('#openingValue').textContent = '100%';
         render();
@@ -1024,9 +1022,6 @@
         d[0] += (meshSide(m) === 'left' ? 1 : -1) * separationIndex(m) * .35;
     } return d; }
     // Rodrigues rotation (bone flap travel uses the same rotation in the shader through uFlapAngle/uFlapAxis/uFlapPivot).
-    function rotateAbout(p, h) { if (!h || !h.angle)
-        return p; const c = Math.cos(h.angle), sn = Math.sin(h.angle), k = h.axis, v = p.map((x, i) => x - h.pivot[i]), kv = k[0] * v[0] + k[1] * v[1] + k[2] * v[2], cr = [k[1] * v[2] - k[2] * v[1], k[2] * v[0] - k[0] * v[2], k[0] * v[1] - k[1] * v[0]]; return v.map((x, i) => h.pivot[i] + x * c + cr[i] * sn + k[i] * kv * (1 - c)); }
-    function labelPoint(m) { return movePoint(m, m.labelAnchor || m.anchor); }
     $('#separateLayers').onclick = () => { separateLayers = !separateLayers; $('#separateLayers').setAttribute('aria-pressed', separateLayers); $('#separateLayers').textContent = separateLayers ? 'Join Fascial Layers' : 'Separate Fascial Layers'; if (separateLayers) {
         enabled.fascia = enabled.deepfascia = enabled.fat = enabled.muscle = true;
         syncControls();
@@ -1184,7 +1179,6 @@
         clearSelection();
         return;
     } selected = i; labelKey = ''; render(); }
-    function positionPopup() { return null; }
     function updateStepLabels() { const popup = $('#popup'), svg = $('#labelLines'); $('#stepLabels').replaceChildren(); svg.replaceChildren(); if (mode !== '3d') {
         popup.hidden = true;
         return;

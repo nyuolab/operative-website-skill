@@ -34,6 +34,8 @@
   "modifiedFiles": [
     "README.md",
     "assets/app.js",
+    "assets/loader.js",
+    "assets/styles.css",
     "data/manifest.json",
     "index.html",
     "tools/anatomy_build/blender_export.py"
@@ -55,7 +57,8 @@
     "Use Calibri for the typography changed in the preceding font update.",
     "Restore Pterional PR #1 trackball, view-space pan, lens zoom, touch twist and keyboard controls. Use one immutable anatomy pivot and clear pan on every camera preset.",
     "Clear active gestures on cancellation, lost capture or window blur.",
-    "Keep Reset View and Home on the opening overview and use its distance and magnification for directional presets. Keep step close-ups in Recommended View and Focus Change."
+    "Keep Reset View and Home on the opening overview and use its distance and magnification for directional presets. Keep step close-ups in Recommended View and Focus Change.",
+    "Remove unused Pterional helpers and repeated style rules. Use the same native-stream anatomy loader and data reader in the reference and generated guides."
   ],
   "geometry": "The current website snapshot retains all six original anatomy chunks and the corrected reflected winding in the optional exporter.",
   "referenceCommit": "bcff83942f3e7005ee645fb12cbecfec9a9a96ca",
@@ -69,11 +72,11 @@
     "assets/anatomy-04.bin": "00beb26b4752eca0177894463e8e0e3cbb233d858b914b9bc989c767dc364698",
     "assets/anatomy-05.bin": "623d8fd6505b9bb4ea13d6ec01b18bcc2ceea8a9de4acb68e75f14ad98340193",
     "assets/anatomy-06.bin": "285c767a8e2a44e4fdaaed63fc2476b6069c970eab8bd3568b093228fa8a137d",
-    "assets/app.js": "2d9ab3c0155cb027095c39b0c96adc7257e6e38aca4130f0ef5660ee7ac0be40",
-    "assets/loader.js": "0c12f76b2846def58df137d74c86d91a8ffd16acffc22189bcedaa32db732049",
-    "assets/styles.css": "475fd7b9edc2efe3d79c720bb75fa3c4dbb41a890c1ffb7b0a7643553c7baa10",
+    "assets/app.js": "3e20c9162d6da132187fb753886ae029ab0508ce93ca064de227af065235ff2b",
+    "assets/loader.js": "f935993211d094c09583117db79f32f0f42989cbe6fa7e6e08bcaf1b27fd1423",
+    "assets/styles.css": "3e33f3ca4d2703cf3f36271c9b1c5ff2bf133a7ce5767d34ab3904962e7d26b1",
     "data/manifest.json": "73e56a520cf93e87eb4a8f9fb3dffe0db18bef45caef4b79329d757c94013cec",
-    "index.html": "5a3f2e2749a585aca70e6b8937d0f00acc9ec75ed664d1e162256f7d181f51ec",
+    "index.html": "d1219e4611321c14ebed9f75da235ddf024420226faf5a2a9bca7ceb33950dfa",
     "tools/anatomy.py": "7d85ed95db8d07013e2ad23a51e9538407fd32b29f73bf46dd820e4f8fbc97db",
     "tools/anatomy_build/ao.py": "87c280b487d7ab450125f9d8803af39ad60e606f61183c59aa01e9556b82880a",
     "tools/anatomy_build/arachnoid.py": "3a1203ba4ce342c3ddb9860eee4e5d70583446e4831b7920c4cd0e9000006825",
