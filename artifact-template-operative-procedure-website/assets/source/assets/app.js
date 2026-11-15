@@ -4,8 +4,6 @@
     const { meshes, manifest } = window.__PTERIONAL_DATA__;
     // Keep manual orbit centered on the cranial vault rather than POSE_PIVOT (the occipital condyles).
     // New procedure manifests should supply an anatomy-specific point for this stable orbit anchor.
-    const ORBIT_CENTER = Array.isArray(manifest.orbit_center) && manifest.orbit_center.length === 3
-        ? manifest.orbit_center.map(Number) : [0, -.7, 0];
     const displayConflicts = window.__GUIDE_DATA__?.['clearance-data'] ??
         JSON.parse($('#clearance-data')?.textContent || '{}');
     const clearanceMeshById = new Map(meshes.map(mesh => [mesh.id, mesh]));
@@ -174,21 +172,20 @@
         pan = [...v.pan]; viewChanged(); render(); }
     // Convert the room frame (+Z up) into the same orbit coordinates as the
     // head frame (+Y up). Preserve existing roll through ordinary drags.
-    function orbitByDrag(dx, dy, k = .008) {
+    function rotateByDrag(dx, dy, k = .008) {
         if (!dx && !dy)
             return;
-        const M = qMat(viewQ), eye = [M[6], M[7], M[8]], worldFrame = camFrame === 'world';
-        const up = worldFrame ? [0, 0, 1] : [0, 1, 0], h0 = eye[0], h1 = worldFrame ? eye[1] : eye[2];
-        // qMat maps model/world into view coordinates: the third row is the eye direction.
-        // Deriving azimuth from that row avoids first-drag jumps; qLook keeps ordinary orbit upright.
-        const az = Math.hypot(h0, h1) > 1e-5 ? Math.atan2(h0, h1)
-            : worldFrame ? Math.atan2(M[1], -M[0]) : Math.atan2(-M[2], M[0]);
-        const el = Math.asin(Math.max(-1, Math.min(1, worldFrame ? eye[2] : eye[1])));
-        const nextAz = az - dx * k, nextEl = Math.max(-1.52, Math.min(1.52, el + dy * k));
-        const c = Math.cos(nextEl), nextEye = worldFrame
-            ? [c * Math.sin(nextAz), c * Math.cos(nextAz), Math.sin(nextEl)]
-            : [c * Math.sin(nextAz), Math.sin(nextEl), c * Math.cos(nextEl)];
-        viewQ = qLook(nextEye, up);
+        const M = qMat(viewQ);
+        const azimuth = Math.hypot(M[6], M[8]) > 1e-8 ? Math.atan2(M[6], M[8]) : Math.atan2(-M[2], M[0]);
+        const elevation = Math.asin(Math.max(-1, Math.min(1, M[7])));
+        // The up direction is undefined at the poles. Stop just short, and
+        // let a preset already closer to a pole move away without jumping.
+        const limit = 1.52;
+        const nextElevation = Math.max(Math.min(-limit, elevation),
+            Math.min(Math.max(limit, elevation), elevation + dy * k));
+        const levelView = qFromAngles(-azimuth, elevation);
+        const roll = qMul(viewQ, qConj(levelView));
+        viewQ = qNorm(qMul(roll, qFromAngles(-azimuth + dx * k, nextElevation)));
         viewChanged();
     }
     function markInteraction() { interactionActive = true; pickDirty = false; clearTimeout(interactionTimer); interactionTimer = setTimeout(() => { if (pointers.size)
@@ -1552,7 +1549,7 @@ if(uSelected>.5)c=mix(c,vec3(.66,1.,.62),.50);if(uIsMarker>.5)c=mix(c,uColor.rgb
         available = true;
         window.guideQA = { solidDepth: true, zoomBy, syncMobileLayout, alignActiveStep, updateMobileReaderHeight, changeKind, procedureLabelRegion, activeLabelMesh, fixedLabelRect, visible, indicationGroups, chooseIndication, setProcedureSide, operativeSide, sideSign, canonicalPoint, onOperativeSide, relevantMesh, stepView, baseId, meshSide, meshOffset, scanPickAnchors, pickIdAt, meshCount: meshes.length, vertexCount, draw, activate, choose, configs, select, setTab, setView, enabled, allEnabled, getMeshes: () => meshes.map(({ data, vertexData, procedureCandidates, fissureCache, ...m }) => m), visibleCount: () => meshes.filter(visible).length, getSteps: () => steps, getState: () => ({ palette, viewZoom, isMobile, config: { ...config }, model: modelIndex() + 1, stage, mode, selected, contextAlpha, contextSide, prelabelsOn, opening, beforeCurrent, regionalContext, instrumentsOn, separateLayers, ...cameraState(), distance, pan: [...pan], target: [...target], enabled: { ...enabled }, allEnabled: { ...allEnabled } }), surgicalState, setPalette, opacity, refreshLabels: updateStepLabels,
             // Camera / head-pose API (see the orientation and head-positioning blocks near the top of this file).
-            getCamera: () => ({ q: [...viewQ], frame: camFrame, target: [...target], distance, pan: [...pan], viewZoom }), setCamera, rotateByDrag: (dx, dy) => { stopGlide(); orbitByDrag(dx, dy); render(); }, rollView: a => { stopGlide(); rollView(a); render(); }, attachCamera: f => { attachCamera(f); render(); }, viewBasis: () => ({ M: [...viewBasis().M], target: [...viewBasis().target] }), project, transform, pickAt: (x, y) => { draw(true); cacheLabelVisibility(); const id = pickIdAt(x, y); draw(); return id; }, setSurgeonView,
+            getCamera: () => ({ q: [...viewQ], frame: camFrame, target: [...target], distance, pan: [...pan], viewZoom }), setCamera, rotateByDrag: (dx, dy) => { stopGlide(); rotateByDrag(dx, dy); render(); }, rollView: a => { stopGlide(); rollView(a); render(); }, attachCamera: f => { attachCamera(f); render(); }, viewBasis: () => ({ M: [...viewBasis().M], target: [...viewBasis().target] }), project, transform, pickAt: (x, y) => { draw(true); cacheLabelVisibility(); const id = pickIdAt(x, y); draw(); return id; }, setSurgeonView,
             getPose: poseState, setPose, setPoseMode, resetPose, gravityInModel, posePoint, poseInverse, posePivot: [...POSE_PIVOT], poseDefault: { ...POSE_DEFAULT },
             // Soft-tissue deformation (curl / peel, incision parting, two-pass regions); see the curl block above.
             stateProgress, movePoint: (i, p) => movePoint(meshes[i], p), getDeformation: i => { const d = deformation(meshes[i]); return d && { curl: d.curl && { key: d.curl.mo.key, progress: d.curl.P, hingeTravel: d.curl.dh, angle: d.curl.T, radius: d.curl.mo.R, dmax: d.curl.mo.dmax }, split: d.split && { kind: d.split.kind, margin: d.split.margin, plane: d.split.plane }, part: d.part && { reveal: d.part.reveal, gap: d.part.gap, sign: d.part.sign }, groove: d.groove, leafCut: !!d.leafCut }; }, curlTuning: CURL_TUNING, variantSnapshot };
@@ -1760,8 +1757,9 @@ if(uSelected>.5)c=mix(c,vec3(.66,1.,.62),.50);if(uIsMarker>.5)c=mix(c,uColor.rgb
         draw();
     } }); }
     // One pointer orbits upright by default and rolls with Alt/Option held.
+    // One pointer orbits upright by default and rolls with Alt/Option held.
     // Shift/right-drag pans; two pointers pan and pinch.
-    let pointers = new Map(), last = null, start = null, moved = 0, dragging = false, pinch = 0, hadMulti = false, pinchCenter = null, orbitPivoted = false;
+    let pointers = new Map(), last = null, start = null, moved = 0, dragging = false, pinch = 0, hadMulti = false, pinchCenter = null;
     const wrapAngle = a => Math.atan2(Math.sin(a), Math.cos(a));
     canvas.onpointerdown = e => { stopGlide(false); try {
         canvas.setPointerCapture(e.pointerId);
@@ -1771,7 +1769,6 @@ if(uSelected>.5)c=mix(c,vec3(.66,1.,.62),.50);if(uIsMarker>.5)c=mix(c,uColor.rgb
         hadMulti = false;
         dragging = false;
         moved = 0;
-        orbitPivoted = false;
         start = [e.clientX, e.clientY];
         markInteraction();
     } pointers.set(e.pointerId, [e.clientX, e.clientY]); if (pointers.size > 1) {
@@ -1815,18 +1812,7 @@ if(uSelected>.5)c=mix(c,vec3(.66,1.,.62),.50);if(uIsMarker>.5)c=mix(c,uColor.rgb
         markInteraction(); rollView(-wrapAngle(angle(e.clientX, e.clientY) - angle(last[0], last[1])));
     }
     else {
-        // Rebase the orbit once, after the drag threshold, without changing the displayed framing.
-        // In the room frame, pose the anatomy-specific model point into room coordinates first.
-        if (!orbitPivoted) {
-            const pivot = camFrame === 'world' ? posePoint(ORBIT_CENTER) : ORBIT_CENTER;
-            const shift = mApply(qMat(viewQ), vSub(pivot, target));
-            pan = vAdd(pan, shift);
-            distance = Math.max(2, distance - shift[2]);
-            target = [...pivot];
-            viewChanged();
-            orbitPivoted = true;
-        }
-        markInteraction(); orbitByDrag(dx, dy);
+        markInteraction(); rotateByDrag(dx, dy);
     } last = [e.clientX, e.clientY]; render(false); };
     canvas.onpointerup = e => { pointers.delete(e.pointerId); if (!dragging && available && !hadMulti) {
         draw(true);
@@ -1838,16 +1824,6 @@ if(uSelected>.5)c=mix(c,vec3(.66,1.,.62),.50);if(uIsMarker>.5)c=mix(c,uColor.rgb
         markInteraction(); };
     canvas.onpointercancel = e => { pointers.delete(e.pointerId); last = null; if (!pointers.size && interactionActive)
         markInteraction(); };
-    canvas.addEventListener('lostpointercapture', e => {
-        if (pointers.has(e.pointerId))
-            canvas.onpointercancel(e);
-    });
-    window.addEventListener('blur', () => {
-        pointers.clear();
-        last = null;
-        if (interactionActive)
-            markInteraction();
-    });
     canvas.oncontextmenu = e => e.preventDefault();
     canvas.addEventListener('wheel', e => { e.preventDefault(); stopGlide(false); markInteraction(); const delta = e.deltaY * (e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? host.clientHeight : 1); zoomBy(Math.exp(-delta * .0015), false); }, { passive: false });
     canvas.onkeydown = e => { if (e.key === 'Escape') {
@@ -1860,13 +1836,13 @@ if(uSelected>.5)c=mix(c,vec3(.66,1.,.62),.50);if(uIsMarker>.5)c=mix(c,uColor.rgb
         stopGlide();
         // Arrow keys orbit. Alt/Option + Q/E rolls.
         if (e.key === 'ArrowLeft')
-            orbitByDrag(-.13, 0, 1);
+            rotateByDrag(-.13, 0, 1);
         if (e.key === 'ArrowRight')
-            orbitByDrag(.13, 0, 1);
+            rotateByDrag(.13, 0, 1);
         if (e.key === 'ArrowUp')
-            orbitByDrag(0, .1, 1);
+            rotateByDrag(0, .1, 1);
         if (e.key === 'ArrowDown')
-            orbitByDrag(0, -.1, 1);
+            rotateByDrag(0, -.1, 1);
         if (key === 'q')
             rollView(.1);
         if (key === 'e')
