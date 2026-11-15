@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-"""Copy the PR #1 reference and expose its editable runtime, styles and JSON data."""
+"""Copy the exact Pterional website and expose its editable inputs."""
 import argparse
 import gzip
+import hashlib
 import json
 import re
 import shutil
@@ -17,6 +18,16 @@ def main():
     dest = args.output.resolve()
     if dest.exists():
         raise SystemExit('Choose a new empty project path; existing projects are never overwritten.')
+    revision = json.loads((source / 'reference-revision.json').read_text())
+    hashes = revision['referenceSha256']
+    if not {'index.html', 'assets/app.js', 'assets/loader.js', 'assets/styles.css', 'data/manifest.json'} <= hashes.keys():
+        raise SystemExit('The reference snapshot is missing required website files.')
+    for name, expected in hashes.items():
+        path = (source / name).resolve()
+        if not path.is_relative_to(source) or not path.is_file():
+            raise SystemExit(f'Invalid Pterional reference path: {name}')
+        if hashlib.sha256(path.read_bytes()).hexdigest() != expected:
+            raise SystemExit(f'Pterional reference differs from the pinned website: {name}')
     html = (source / 'index.html').read_text()
     loader = (source / 'assets/loader.js').read_text()
     match = re.search(r'const files\s*=\s*(\[.*?\])\s*,\s*message\s*=', loader, re.S)

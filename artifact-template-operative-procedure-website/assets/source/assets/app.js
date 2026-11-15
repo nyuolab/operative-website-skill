@@ -27,9 +27,11 @@
     const surgicalRgb = Object.fromEntries(Object.entries(palettes.surgical).map(([k, c]) => [k, hexRgb(c)]));
     const allEnabled = Object.fromEntries(Object.keys(enabled).map(k => [k, false]));
     const canvas = $('#canvas'), host = $('#viewport');
-    // Camera state: viewQ/camFrame/target are described with the orientation helpers below; distance, pan (screen
+    // Midpoint of the native cranial vault bounds, shared by every camera preset.
+    const anatomyCenter = [0, -.35, -.41];
+    // Camera state: viewQ/camFrame are described with the orientation helpers below; distance, pan (screen
     // space, after rotation) and viewZoom keep their original meaning.
-    let gl = null, program = null, uniforms = {}, buffer = null, available = false, viewQ = qFromAngles(1.0, .25, 0), camFrame = 'head', distance = 15, pan = [0, 0], target = [-1, 0, .5], aspect = 1, scheduled = false, pickDirty = true, interactionActive = false, interactionTimer = 0;
+    let gl = null, program = null, uniforms = {}, buffer = null, available = false, viewQ = qFromAngles(1.0, .25, 0), camFrame = 'head', distance = 15, pan = [0, 0], aspect = 1, scheduled = false, pickDirty = true, interactionActive = false, interactionTimer = 0;
     const scale = 2.05, LINE_MIN_HALF_PX = 1.3, LINE_NUDGE = .03;
     const configs = [];
     for (const c of ['none', 'extra', 'intra'])
@@ -45,7 +47,7 @@
     // ---- Free rotation: orientation helpers -----------------------------------------------------------------------
     // Rotations are row-major 3x3 arrays [m00, m01, m02, m10, ...]; quaternions are [x, y, z, w].
     // View space: +x right, +y up, +z toward the viewer. The eye sits at +z = `distance` from the orbit target and the
-    // projection (w = distance - z, then screen-space pan and zoom) is unchanged from the original yaw/pitch renderer.
+    // perspective projection uses w = distance - z. Pan offsets the projected image in CSS pixels.
     // The camera orientation is the quaternion viewQ, which rotates the camera's reference frame (camFrame) into view
     // space:
     //   'head'  - patient model coordinates (+X patient left, +Y superior, +Z anterior). The camera moves with the head,
@@ -53,8 +55,7 @@
     //             presets are head-framed: Anterior/Right/Left/Top and step (recommended) views.
     //   'world' - the operating room (see the head-pose block below). The camera stays in the room while the head is
     //             posed; used by Surgeon's View, the 'position' step view and whenever the user changes the pose.
-    // `target` (orbit centre) is expressed in camFrame as well. viewBasis() resolves everything to one head->view
-    // rotation M plus the orbit centre in model coordinates; the shader (uView, uTarget), transform(), project(),
+    // viewBasis() resolves the rotation and common anatomy center in model coordinates; the shader (uView, uTarget), transform(), project(),
     // picking, label anchors, depth sorting and cameraPosition() all use that basis.
     // Presets may still be authored as yaw/pitch(/roll): M = Rz(roll) * Rx(pitch) * Ry(yaw). The old
     // screenOrientation = -1 (image turned 180 degrees so the skull base is at the top) is roll = PI.
@@ -135,65 +136,99 @@
     // the vertex-shader uniform uGravity (declared for later work such as brain relaxation; unused until then).
     function gravityInModel() { return [-poseR[6], -poseR[7], -poseR[8]]; }
     function viewChanged() { viewCache = null; }
-    // Head(model) -> view rotation M and the orbit centre in model coordinates for the current camera and pose.
-    function viewBasis() { if (!viewCache) {
-        const V = qMat(viewQ);
-        viewCache = camFrame === 'world' ? { M: mMul(V, poseR), target: poseInverse(target) } : { M: V, target: [...target] };
-    } return viewCache; }
-    // Re-express the camera in the other frame without changing the image at the displayed pose.
-    let camGlide = null; // see glideCamera
-    // A running camera glide is re-expressed in the new frame too (its endpoints), so e.g. a pose control used during
-    // the glide out of the 'position' step still lands on the step view instead of mixing frames.
-    function attachCamera(frame) { if (frame === camFrame)
-        return; const Pq = matQ(poseR), toWorld = frame === 'world', q = x => qNorm(toWorld ? qMul(x, qConj(Pq)) : qMul(x, Pq)), t = x => toWorld ? posePoint(x) : poseInverse(x); viewQ = q(viewQ); target = t(target); if (camGlide)
-        for (const e of [camGlide.from, camGlide.to]) {
-            e.q = q(e.q);
-            e.target = t(e.target);
-        } camFrame = frame; viewChanged(); }
-    // Apply a camera preset: v.frame 'head' (default) or 'world'; orientation from yaw/pitch(/roll) or eye/up (qLook);
-    // optional target (in that frame), distance and zoom (a longer lens for room views). Pan is left to the caller.
-    function applyCamera(v) { camFrame = v.frame || 'head'; viewQ = v.eye ? qLook(v.eye, v.up || [0, 1, 0]) : qFromAngles(v.yaw, v.pitch, v.roll || 0); if (v.target)
-        target = [...v.target]; if (v.distance != null)
-        distance = v.distance; if (v.zoom != null)
-        viewZoom = v.zoom; viewChanged(); }
-    // QA / scripting entry point: v = { frame?, q? | yaw/pitch/roll? | eye/up?, target?, distance?, zoom?, pan? }. A frame
-    // change without a target keeps the current orbit centre (re-expressed in the new frame); omitted orientation keeps
-    // the current one.
-    function setCamera(v = {}) { stopGlide(); if (v.frame && v.frame !== camFrame)
-        attachCamera(v.frame); if (v.q)
-        viewQ = qNorm(v.q);
-    else if (v.eye || v.yaw != null)
-        viewQ = v.eye ? qLook(v.eye, v.up || [0, 1, 0]) : qFromAngles(v.yaw, v.pitch || 0, v.roll || 0); if (v.target)
-        target = [...v.target]; if (v.distance != null)
-        distance = v.distance; if (v.zoom != null)
-        viewZoom = v.zoom; if (v.pan)
-        pan = [...v.pan]; viewChanged(); render(); }
-    // Convert the room frame (+Z up) into the same orbit coordinates as the
-    // head frame (+Y up). Preserve existing roll through ordinary drags.
-    function orbitByDrag(dx, dy, k = .008) {
-        if (!dx && !dy)
+    // All cameras look at the same anatomical point. Room framing changes the
+    // orientation relative to the patient pose, while the center follows the anatomy.
+    function viewBasis() {
+        if (!viewCache) {
+            const V = qMat(viewQ);
+            viewCache = { M: camFrame === 'world' ? mMul(V, poseR) : V, target: anatomyCenter };
+        }
+        return viewCache;
+    }
+    let camGlide = null;
+    // Map the preset's up direction to the orbit controller's +Y axis.
+    let orbitBasis = [0, 0, 0, 1], screenPlaneOrbit = false;
+    function orbitBasisFor(up) {
+        if (!up) return [0, 0, 0, 1];
+        const y = vNorm(up);
+        const axis = Math.abs(y[2]) < .9 ? [0, 0, 1] : [0, 1, 0];
+        return qLook(vSub(axis, vScale(y, vDot(y, axis))), y);
+    }
+    // Re-express the orientation in another frame at the currently displayed pose.
+    function attachCamera(frame) {
+        if (frame === camFrame) return;
+        const Pq = matQ(poseR);
+        const convert = q => qNorm(qMul(q, frame === 'world' ? qConj(Pq) : Pq));
+        viewQ = convert(viewQ);
+        orbitBasis = convert(orbitBasis);
+        if (camGlide) {
+            for (const pose of [camGlide.from, camGlide.to]) {
+                pose.q = convert(pose.q);
+                pose.orbitBasis = convert(pose.orbitBasis);
+            }
+        }
+        camFrame = frame;
+        viewChanged();
+    }
+    function orientCamera(v) {
+        screenPlaneOrbit = v.screenPlaneOrbit ?? false;
+        if (v.q) {
+            viewQ = qNorm(v.q);
+            if (v.orbitBasis) orbitBasis = qNorm(v.orbitBasis);
+            else if (v.up) orbitBasis = orbitBasisFor(v.up);
+        } else {
+            viewQ = v.eye ? qLook(v.eye, v.up || [0, 1, 0]) : qFromAngles(v.yaw, v.pitch || 0, v.roll || 0);
+            orbitBasis = orbitBasisFor(v.eye ? v.up : null);
+        }
+    }
+    function applyCamera(v) {
+        camFrame = v.frame || 'head';
+        orientCamera(v);
+        if (v.distance != null) distance = v.distance;
+        if (v.zoom != null) viewZoom = v.zoom;
+        viewChanged();
+    }
+    // Explicit camera selections survive the automatic Position demonstration.
+    function setCamera(v = {}) {
+        stopGlide();
+        cameraExplicit = true;
+        if (v.frame && v.frame !== camFrame) attachCamera(v.frame);
+        if (v.q || v.eye || v.yaw != null) orientCamera(v);
+        if (v.distance != null) distance = v.distance;
+        if (v.zoom != null) viewZoom = v.zoom;
+        if (v.pan) pan = [...v.pan];
+        viewChanged();
+        render();
+    }
+    // Keep the signed elevation across input events. Deriving it from asin on
+    // each move would fold it back at the poles and reverse the drag direction.
+    let orbit = null;
+    function rotateByDrag(dx, dy, k = .008) {
+        if (!dx && !dy) return;
+        if (screenPlaneOrbit) {
+            // Orbit about axes in the image plane. A preset-up yaw would
+            // also twist around the sightline when looking steeply down.
+            const turn = qAxis([dy, dx, 0], Math.hypot(dx, dy) * k);
+            viewQ = qNorm(qMul(turn, viewQ));
+            viewChanged();
             return;
-        const frameToOrbit = camFrame === 'world' ? qAxis([1, 0, 0], -Math.PI / 2) : [0, 0, 0, 1];
-        const orientation = qMul(viewQ, qConj(frameToOrbit));
-        const M = qMat(orientation);
-        const azimuth = Math.hypot(M[6], M[8]) > 1e-8 ? Math.atan2(M[6], M[8]) : Math.atan2(-M[2], M[0]);
-        const elevation = Math.asin(Math.max(-1, Math.min(1, M[7])));
-        // The up direction is undefined at the poles. Stop just short, and
-        // let a preset already closer to a pole move away without jumping.
-        const limit = 1.52;
-        const levelView = qFromAngles(-azimuth, elevation);
-        const roll = qMul(orientation, qConj(levelView));
-        const cosine = 1 - 2 * roll[2] ** 2, sine = 2 * roll[2] * roll[3];
-        const horizontal = dx * cosine - dy * sine;
-        const vertical = dx * sine + dy * cosine;
-        const nextElevation = Math.max(Math.min(-limit, elevation),
-            Math.min(Math.max(limit, elevation), elevation + vertical * k));
-        viewQ = qNorm(qMul(qMul(roll, qFromAngles(-azimuth + horizontal * k, nextElevation)), frameToOrbit));
+        }
+        if (orbit?.q !== viewQ) {
+            const relativeView = qMul(viewQ, qConj(orbitBasis));
+            const M = qMat(relativeView);
+            const yaw = Math.hypot(M[6], M[8]) > 1e-8 ? Math.atan2(-M[6], M[8]) : Math.atan2(M[2], M[0]);
+            const pitch = Math.asin(Math.max(-1, Math.min(1, M[7])));
+            orbit = { yaw, pitch, roll: qMul(relativeView, qConj(qFromAngles(yaw, pitch))) };
+        }
+        orbit.yaw = wrapAngle(orbit.yaw + dx * k);
+        orbit.pitch = wrapAngle(orbit.pitch + dy * k);
+        const relativeView = qMul(orbit.roll, qFromAngles(orbit.yaw, orbit.pitch));
+        viewQ = orbit.q = qNorm(qMul(relativeView, orbitBasis));
         viewChanged();
     }
     function markInteraction() { interactionActive = true; pickDirty = false; clearTimeout(interactionTimer); interactionTimer = setTimeout(() => { if (pointers.size)
         return; interactionActive = false; render(true); }, 140); }
-    // Camera glide: slerp the orientation and ease target, distance, pan and zoom to a preset (same frame) over
+    // Camera glide: slerp the orientation and ease distance, pan and zoom to a preset (same frame) over
     // `duration` ms, timed by poseClock like the pose blend. Used when the 'position' step frames the room; any user
     // camera input or preset cancels it (stopGlide). Study-plate captures ignore it.
     function qSlerp(a, b, t) { let d = a[0] * b[0] + a[1] * b[1] + a[2] * b[2] + a[3] * b[3]; if (d < 0) {
@@ -201,33 +236,39 @@
         d = -d;
     } if (d > .9995)
         return qNorm(a.map((x, i) => x + (b[i] - x) * t)); const th = Math.acos(d), sa = Math.sin((1 - t) * th) / Math.sin(th), sb = Math.sin(t * th) / Math.sin(th); return a.map((x, i) => x * sa + b[i] * sb); }
-    function glideCamera(v, duration = 1000) { attachCamera(v.frame || 'head'); const from = { q: [...viewQ], target: [...target], distance, pan: [...pan], zoom: viewZoom }; applyCamera(v); const to = { q: [...viewQ], target: [...target], distance, pan: [0, 0], zoom: v.zoom ?? 1 }; if (matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    function glideCamera(v, duration = 1000) { attachCamera(v.frame || 'head'); const from = { q: viewQ, orbitBasis, distance, pan: [...pan], zoom: viewZoom }; applyCamera(v); const to = { q: viewQ, orbitBasis, distance, pan: [0, 0], zoom: v.zoom ?? 1 }; if (matchMedia('(prefers-reduced-motion: reduce)').matches) {
         pan = [0, 0];
         viewZoom = to.zoom;
         camGlide = null;
     }
     else {
         viewQ = from.q;
-        target = from.target;
+        orbitBasis = from.orbitBasis;
         distance = from.distance;
         viewZoom = from.zoom;
         camGlide = { from, to, start: performance.now(), duration };
     } viewChanged(); render(); }
-    // stopGlide(false) only halts the motion; any other call is user camera input or a preset, which also ends the
-    // automatic room framing of the 'position' step (roomCameraAuto, see activate).
-    // Leaving the 'position' step with a room-framed camera always glides back to the next step's view unless the user
-    // chose Surgeon's View (surgeonChosen); clicks with pointer jitter (under 5 px) and wheel zoom do not count as
-    // camera input for roomCameraAuto.
-    let roomCameraAuto = false, surgeonChosen = false;
+    // User camera input ends automatic room framing. An explicit preset also
+    // prevents the Position step from taking control of the camera.
+    let roomCameraAuto = false, cameraExplicit = false;
     function stopGlide(user = true) { camGlide = null; if (user)
         roomCameraAuto = false; }
     function updateGlide() { if (!camGlide || capturing)
-        return; const { from, to } = camGlide, t = Math.max(0, Math.min(1, (poseClock - camGlide.start) / camGlide.duration)), e = smoothstep01(t), mix = (a, b) => a + (b - a) * e; viewQ = qSlerp(from.q, to.q, e); target = from.target.map((x, i) => mix(x, to.target[i])); distance = mix(from.distance, to.distance); pan = from.pan.map((x, i) => mix(x, to.pan[i])); viewZoom = mix(from.zoom, to.zoom); viewChanged(); if (t >= 1)
+        return; const { from, to } = camGlide, t = Math.max(0, Math.min(1, (poseClock - camGlide.start) / camGlide.duration)), e = smoothstep01(t), mix = (a, b) => a + (b - a) * e; viewQ = qSlerp(from.q, to.q, e); orbitBasis = qSlerp(from.orbitBasis, to.orbitBasis, e); distance = mix(from.distance, to.distance); pan = from.pan.map((x, i) => mix(x, to.pan[i])); viewZoom = mix(from.zoom, to.zoom); viewChanged(); if (t >= 1)
         camGlide = null;
     else
         render(); }
     // Roll about the line of sight; a positive angle turns the image counter-clockwise.
-    function rollView(angle) { viewQ = qNorm(qMul(qAxis([0, 0, 1], angle), viewQ)); viewChanged(); }
+    function rollView(angle) {
+        const delta = qAxis([0, 0, 1], angle);
+        const continuingOrbit = orbit?.q === viewQ;
+        viewQ = qNorm(qMul(delta, viewQ));
+        if (continuingOrbit) {
+            orbit.roll = qNorm(qMul(delta, orbit.roll));
+            orbit.q = viewQ;
+        }
+        viewChanged();
+    }
     function meshSide(m) { if (m.procedureSide)
         return m.procedureSide; if (m.nativeName.endsWith('.l'))
         return 'left'; if (m.nativeName.endsWith('.r'))
@@ -241,8 +282,8 @@
         return false; // The isolated skull-base view omits cortex (and the arachnoid on it), as the About panel states.
     if (s?.isolateBone && ['brain', 'arachnoid'].includes(m.group))
         return false; return true; }
-    // A step's recommended camera, mirrored for a left-sided procedure (yaw and roll change sign; eye/up/target x flip).
-    function stepView(s) { const sign = sideSign(), v = s.view, mx = p => p && [p[0] * sign, p[1], p[2]]; return { ...v, frame: v.frame || 'head', yaw: v.yaw * sign, roll: (v.roll || 0) * sign, eye: mx(v.eye), up: mx(v.up), target: mx(v.target) }; }
+    // A step's recommended camera, mirrored for a left-sided procedure (yaw and roll change sign; eye/up x flip).
+    function stepView(s) { const sign = sideSign(), v = s.view, mx = p => p && [p[0] * sign, p[1], p[2]]; return { ...v, frame: v.frame || 'head', yaw: v.yaw * sign, roll: (v.roll || 0) * sign, eye: mx(v.eye), up: mx(v.up) }; }
     function setProcedureSide(side) { if (!['right', 'left', 'both'].includes(side))
         return; contextSide = side; clearSelection(); syncControls(); updateChangeControls(); if (mode === '2d')
         showDiagram();
@@ -414,7 +455,7 @@
     $('#paperSearch').oninput = renderPapers;
     function openPaper(id) { setTab('papers'); $('#paperSearch').value = ''; renderPapers(); $('#paper-' + id)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }
     function captureStepImages() { if (!available || typeof canvas.toDataURL !== 'function')
-        return manifest.study_plates || []; const saved = { viewQ: [...viewQ], camFrame, poseOverride, distance, viewZoom, target: [...target], pan: [...pan], selected, opening, procedure, contextSide, separateLayers, enabled: { ...enabled }, allEnabled: { ...allEnabled }, beforeCurrent, regionalContext, hidden: meshes.map(m => m.hidden) }; const s = steps[stage], vside = stepView(s), images = []; capturing = true; try {
+        return manifest.study_plates || []; const saved = { viewQ, orbitBasis, screenPlaneOrbit, camFrame, poseOverride, distance, viewZoom, pan: [...pan], selected, opening, procedure, contextSide, separateLayers, enabled: { ...enabled }, allEnabled: { ...allEnabled }, beforeCurrent, regionalContext, hidden: meshes.map(m => m.hidden) }; const s = steps[stage], vside = stepView(s), images = []; capturing = true; try {
         viewZoom = 1;
         regionalContext = saved.regionalContext;
         selected = -1;
@@ -429,7 +470,7 @@
         const views = hasStageChange() ? [{ ...vside, title: 'Before this step', before: true }, { ...vside, title: 'After this step', before: false }] : [{ ...vside, title: 'Approach view' }, { title: s.id === 'muscle' ? 'Fascial planes' : 'Superior oblique view', frame: 'head', yaw: (s.id === 'muscle' ? .72 : .8) * sideSign(), pitch: s.id === 'muscle' ? .12 : 1.02, distance: s.id === 'muscle' ? 15 : s.view.distance + 1, target: vside.target }];
         for (const v of views) {
             beforeCurrent = v.before ?? saved.beforeCurrent;
-            updatePose(); // so a world-framed plate target resolves against the plate's own pose
+            updatePose(); // Render the plate with its own patient pose.
             applyCamera(v);
             viewZoom = v.zoom ?? 1;
             pan = [0, 0];
@@ -444,11 +485,12 @@
     }
     finally {
         viewQ = saved.viewQ;
+        orbitBasis = saved.orbitBasis;
+        screenPlaneOrbit = saved.screenPlaneOrbit;
         camFrame = saved.camFrame;
         poseOverride = saved.poseOverride;
         distance = saved.distance;
         viewZoom = saved.viewZoom;
-        target = saved.target;
         viewChanged();
         pan = saved.pan;
         selected = saved.selected;
@@ -464,7 +506,7 @@
         capturing = false;
         draw(false);
     } return images; }
-    function showDiagram() { const p = $('#figurepanel'), images = captureStepImages(); p.innerHTML = `<div class="diagram"><h2>${escape(titleCase(steps[stage].title))}</h2><div class="reference-plates">${images.map((im, i) => `<figure><img src="${im.image}" alt="${escape(im.alt)}" data-expand="${i}"><figcaption>${escape(im.caption)}</figcaption><button class="image-save" data-save="${i}">Save PNG</button></figure>`).join('')}</div><details class="plane-details" ${steps[stage].id === 'muscle' ? 'open' : ''}><summary>Temporal Tissue Planes</summary><svg viewBox="0 0 670 500" role="img" aria-label="Superficial to deep temporal tissue layers"><g font-family="system-ui" font-size="14" fill="#dce9dd">${[['Skin / subcutaneous tissue', '#8e9f79'], ['Suprafascial fat pad', '#dfc990'], ['Superficial fascial lamina', '#85b3a6'], ['Interfascial fat pad', '#c4ad70'], ['Deep fascial lamina', '#77a397'], ['Subfascial fat pad', '#cbb76b'], ['Temporalis muscle', '#b87367'], ['Periosteum / skull', '#d0c3a5']].map(([name, color], i) => `<rect x="24" y="${24 + i * 53}" width="260" height="34" rx="6" fill="${color}"/><text x="308" y="${46 + i * 53}">${escape(titleCase(name))}</text>`).join('')}${config.muscle === 'subfascial' ? '<path d="M 10 281 H 288" stroke="#dff09d" stroke-width="3" stroke-dasharray="6 4"/>' : ''}</g></svg></details></div>`; p.querySelectorAll('[data-expand]').forEach(img => img.onclick = () => img.parentElement.classList.toggle('expanded', !img.parentElement.classList.contains('expanded'))); p.querySelectorAll('[data-save]').forEach(b => b.onclick = () => { const im = images[+b.dataset.save]; downloadBlob(new Blob([decode64(im.image.split(',')[1])], { type: 'image/png' }), 'pterional-' + steps[stage].id + '-' + (+b.dataset.save + 1) + '.png'); }); }
+    function showDiagram() { const p = $('#figurepanel'), images = captureStepImages(); p.innerHTML = `<div class="diagram"><h2>${escape(titleCase(steps[stage].title))}</h2><div class="reference-plates">${images.map((im, i) => `<figure><img src="${im.image}" alt="${escape(im.alt)}" data-expand="${i}"><figcaption>${escape(im.caption)}</figcaption><button class="image-save" data-save="${i}">Save PNG</button></figure>`).join('')}</div><details class="plane-details" ${steps[stage].id === 'muscle' ? 'open' : ''}><summary>Temporal Tissue Planes</summary><svg viewBox="0 0 670 500" role="img" aria-label="Superficial to deep temporal tissue layers"><g font-family="Calibri, Carlito, Arial, sans-serif" font-size="14" fill="#dce9dd">${[['Skin / subcutaneous tissue', '#8e9f79'], ['Suprafascial fat pad', '#dfc990'], ['Superficial fascial lamina', '#85b3a6'], ['Interfascial fat pad', '#c4ad70'], ['Deep fascial lamina', '#77a397'], ['Subfascial fat pad', '#cbb76b'], ['Temporalis muscle', '#b87367'], ['Periosteum / skull', '#d0c3a5']].map(([name, color], i) => `<rect x="24" y="${24 + i * 53}" width="260" height="34" rx="6" fill="${color}"/><text x="308" y="${46 + i * 53}">${escape(titleCase(name))}</text>`).join('')}${config.muscle === 'subfascial' ? '<path d="M 10 281 H 288" stroke="#dff09d" stroke-width="3" stroke-dasharray="6 4"/>' : ''}</g></svg></details></div>`; p.querySelectorAll('[data-expand]').forEach(img => img.onclick = () => img.parentElement.classList.toggle('expanded', !img.parentElement.classList.contains('expanded'))); p.querySelectorAll('[data-save]').forEach(b => b.onclick = () => { const im = images[+b.dataset.save]; downloadBlob(new Blob([decode64(im.image.split(',')[1])], { type: 'image/png' }), 'pterional-' + steps[stage].id + '-' + (+b.dataset.save + 1) + '.png'); }); }
     function buildSteps() {
         // position: head in the operative pose (see poseFraction). Scalp states: skin / galea incised (incision parting),
         // scalp flap reflected, pericranial flap raised, temporalis reflected (subfascial branch; in the myocutaneous
@@ -537,6 +579,7 @@
     const persistentLayers = new Set(['brain', 'arteries', 'veins', 'nerves', 'arachnoid']);
     function applyRecommendedView({ preserveCamera = false } = {}) { const s = steps[stage]; for (const k in enabled)
         enabled[k] = persistentLayers.has(k) || s.groups.includes(k); contextAlpha = 1; procedure = true; meshes.forEach(m => m.hidden = false); if (!preserveCamera) {
+        cameraExplicit = false;
         viewZoom = 1;
         regionalContext = true;
         for (const k in allEnabled)
@@ -551,18 +594,18 @@
     // with that framing untouched glides on to the new step's recommended (head-framed) view, so the walkthrough
     // returns to the anatomy, which then looks as it did before positioning existed.
     const changed = activeStepId !== steps[stage].id; if (changed && steps[stage].change === 'position' && $('#positionControls'))
-        $('#positionControls').open = true; if (changed && steps[stage].change === 'position') {
+        $('#positionControls').open = true; if (changed && !cameraExplicit && steps[stage].change === 'position') {
         glideCamera(stepView(steps[stage]), 1100);
         roomCameraAuto = true;
     }
-    else if (changed && (roomCameraAuto || activeStepId === 'position' && camFrame === 'world' && !surgeonChosen)) {
+    else if (changed && !cameraExplicit && (roomCameraAuto || activeStepId === 'position' && camFrame === 'world')) {
         glideCamera(stepView(steps[stage]), 900);
         roomCameraAuto = false;
     } activeStepId = steps[stage].id; applyRecommendedView({ preserveCamera: true }); updateChangeControls(); updateMobileReaderHeight(); alignActiveStep(); if (mode === '2d')
         showDiagram(); }
     $('#previous').onclick = () => { setTab('steps'); activate(stage - 1); };
     $('#next').onclick = () => { setTab('steps'); activate(stage + 1); };
-    $('#recommendedView').onclick = () => { surgeonChosen = false; applyRecommendedView(); };
+    $('#recommendedView').onclick = () => applyRecommendedView();
     $$('[data-layer]').forEach(e => e.onchange = () => { enabled[e.dataset.layer] = e.checked; clearSelection(); updateChangeControls(); render(); });
     $$('[data-all-layer]').forEach(e => e.onchange = () => { allEnabled[e.dataset.allLayer] = e.checked; regionalContext = !Object.values(allEnabled).some(Boolean); clearSelection(); updateChangeControls(); render(); });
     $('#side').onchange = e => setProcedureSide(e.target.value);
@@ -683,8 +726,14 @@
     // Model point -> view space (JS mirror of the vertex shader: p = uView * (q - uTarget)).
     function transform(p) { const { M, target: t } = viewBasis(); return mApply(M, [p[0] - t[0], p[1] - t[1], p[2] - t[2]]); }
     // Eye position in the canonical (operative-side = right) model frame used by the fragment shader (vOriginal).
-    function cameraPosition() { const { M, target: t } = viewBasis(); return canonicalPoint(vAdd(t, mApply(mT(M), [-pan[0], -pan[1], distance]))); }
-    function project(p) { const t = transform(p), w = distance - t[2]; return [(t[0] + pan[0]) * scale * viewZoom / aspect / w * host.clientWidth / 2 + host.clientWidth / 2, host.clientHeight / 2 - (t[1] + pan[1]) * scale * viewZoom / w * host.clientHeight / 2]; }
+    function cameraPosition() { const { M, target: t } = viewBasis(); return canonicalPoint(vAdd(t, mApply(mT(M), [0, 0, distance]))); }
+    // Pan is a screen offset in CSS pixels, shared by drawing, picking and labels.
+    function project(p) {
+        const t = transform(p), magnification = scale * viewZoom / (distance - t[2]);
+        const x = (1 + t[0] * magnification / aspect) * host.clientWidth / 2;
+        const y = (1 - t[1] * magnification) * host.clientHeight / 2;
+        return [x + pan[0], y + pan[1]];
+    }
     const smoothstep01 = t => t * t * (3 - 2 * t);
     // ---- Soft-tissue curl / peel ------------------------------------------------------------------------------------
     // Flaps fold by the FLAP CONTRACT shared with the data build (record.flap = {key, pivot, axis, away, lift, radius,
@@ -1239,24 +1288,14 @@
         line.setAttribute('y2', Math.max(r.y, Math.min(r.y + r.h, a.y)));
         svg.append(line);
     } }
-    // Head-framed anatomical presets; like before they keep the orbit target and distance (re-expressed in model
-    // coordinates if the camera was room-fixed).
-    function setView(v) { const views = { anterior: [0, 0], right: [Math.PI / 2, 0], left: [-Math.PI / 2, 0], superior: [0, 1.5] }; if (!views[v])
-        return; stopGlide(); surgeonChosen = false; attachCamera('head'); applyCamera({ frame: 'head', yaw: views[v][0], pitch: views[v][1] }); pan = [0, 0]; render(); }
-    // Surgeon's View (room-framed): from the head of the table, above and behind the vertex, looking down at the
-    // operative field as the seated surgeon sees it (screen up = toward the patient's feet). It is aimed at the bone
-    // window centre at the selected progress. Settle the pose before placing the inspection camera.
+    function setView(v) {
+        const views = { anterior: [0, 0], right: [Math.PI / 2, 0], left: [-Math.PI / 2, 0], superior: [0, 1.5] };
+        if (!views[v]) return;
+        setCamera({ frame: 'head', yaw: views[v][0], pitch: views[v][1], pan: [0, 0] });
+    }
+    // Move to the surgeon camera position and keep the user’s pan and lens zoom.
     function setSurgeonView() {
-        stopGlide();
-        surgeonChosen = true;
-        animationToken++;
-        poseBlend = null;
-        updatePose();
-        const sign = sideSign(), center = canonicalPoint([-2.7, .3, 1.25]);
-        applyCamera({ frame: 'world', eye: [-.3 * sign, .62, .72], up: [0, 0, 1],
-            target: posePoint(center), distance: 14, zoom: 1 });
-        pan = [0, 0];
-        render();
+        setCamera({ frame: 'world', eye: [-.3 * sideSign(), .62, .72], up: [0, 0, 1], distance: 14, screenPlaneOrbit: true });
     }
     // ---- Patient Position controls (Layers & View panel) -------------------------------------------------------------
     // Changing the pose re-attaches the camera to the room first (same image), so the head visibly turns while the
@@ -1442,7 +1481,7 @@ q+=uOffset;
 // View: uView = head(model)->view rotation (camera orientation x head pose), uTarget = orbit centre in model space.
 // q/norm are model-space (after flap motion); deformations belong above this line. uGravity (unit, model space) is
 // provided for later gravity-driven deformation and is optimised away while unused.
-if(uLine>0.){float w0=uDistance-(uView*(q-uTarget)).z;q+=norm*max(0.,w0*uLinePx-uLine);}vec3 p=uView*(q-uTarget);vNormal=uView*norm;vObjN=vec3(aNormal.x*uSide,aNormal.yz)/max(vAO,1e-4);float w=uDistance-p.z;vEye=vec3(-(p.x+uPan.x),-(p.y+uPan.y),w);float wz=uLine>0.?max(w-uLineNudge,.05):w;gl_Position=vec4((p.x+uPan.x)*uScale/uAspect,(p.y+uPan.y)*uScale,(1.0125786-1.0062893/wz)*w,w);}`));
+if(uLine>0.){float w0=uDistance-(uView*(q-uTarget)).z;q+=norm*max(0.,w0*uLinePx-uLine);}vec3 p=uView*(q-uTarget);vNormal=uView*norm;vObjN=vec3(aNormal.x*uSide,aNormal.yz)/max(vAO,1e-4);float w=uDistance-p.z;vEye=vec3(-p.x,-p.y,w);float wz=uLine>0.?max(w-uLineNudge,.05):w;gl_Position=vec4(p.x*uScale/uAspect+uPan.x*w,p.y*uScale+uPan.y*w,(1.0125786-1.0062893/wz)*w,w);}`));
         gl.attachShader(program, shader(gl.FRAGMENT_SHADER, `#ifdef GL_FRAGMENT_PRECISION_HIGH
 precision highp float;
 #else
@@ -1492,7 +1531,7 @@ if(tissue&&uSurgical>.5){
  else if(uMaterial<10.5){
   /* skin: mottled warm epidermis with fine pores and a faint sheen; cut edge = pink-white dermis over lobulated
      yellow subcutaneous fat with a thin bloody line at the epidermis; inner face = subcutaneous fat */
-  if(srad>.45){float m=fbm(P*6.);base*=.9+.13*m;base=mix(base,base*vec3(1.07,.86,.84),.3*smoothstep(.45,.8,fbm(P*2.3+5.)));base*=1.-.07*NOISE*smoothstep(.68,.9,vnoise(P*95.));shin=24.;specI=.13;wrap=.5;sss=.6;}
+  if(srad>.45){float m=fbm(P*3.5);base*=.96+.08*m;base=mix(base,base*vec3(1.04,.93,.92),.24*smoothstep(.45,.8,fbm(P*2.3+5.)));base*=1.-.025*NOISE*smoothstep(.68,.9,vnoise(P*60.));shin=16.;specI=.09;wrap=.57;sss=.6;}
   else if(srad>-.45){float f=clamp(.5-srad*1.47,0.,1.);vec3 derm=vec3(.9,.72,.67)*(.93+.1*vnoise(P*120.)),fat=uInner*(.86+.2*fbm(P*45.));base=mix(derm,fat,smoothstep(.5,.62,f));base=mix(base,vec3(.52,.12,.1),.55*(1.-smoothstep(.02,.1,f)));shin=80.;specI=.4;wrap=.5;sss=.35;}
   else{base=uInner*(.86+.2*fbm(P*40.));shin=70.;specI=.35;wrap=.6;sss=.4;}}
  else if(uMaterial<11.5){
@@ -1548,9 +1587,9 @@ if(uSelected>.5)c=mix(c,vec3(.66,1.,.62),.50);if(uIsMarker>.5)c=mix(c,uColor.rgb
             gl.vertexAttribPointer(loc, 3, gl.FLOAT, false, 24, start);
         }
         available = true;
-        window.guideQA = { solidDepth: true, zoomBy, syncMobileLayout, alignActiveStep, updateMobileReaderHeight, changeKind, procedureLabelRegion, activeLabelMesh, fixedLabelRect, visible, indicationGroups, chooseIndication, setProcedureSide, operativeSide, sideSign, canonicalPoint, onOperativeSide, relevantMesh, stepView, baseId, meshSide, meshOffset, scanPickAnchors, pickIdAt, meshCount: meshes.length, vertexCount, draw, activate, choose, configs, select, setTab, setView, enabled, allEnabled, getMeshes: () => meshes.map(({ data, vertexData, procedureCandidates, fissureCache, ...m }) => m), visibleCount: () => meshes.filter(visible).length, getSteps: () => steps, getState: () => ({ palette, viewZoom, isMobile, config: { ...config }, model: modelIndex() + 1, stage, mode, selected, contextAlpha, contextSide, prelabelsOn, opening, beforeCurrent, regionalContext, instrumentsOn, separateLayers, ...cameraState(), distance, pan: [...pan], target: [...target], enabled: { ...enabled }, allEnabled: { ...allEnabled } }), surgicalState, setPalette, opacity, refreshLabels: updateStepLabels,
+        window.guideQA = { solidDepth: true, zoomBy, syncMobileLayout, alignActiveStep, updateMobileReaderHeight, changeKind, procedureLabelRegion, activeLabelMesh, fixedLabelRect, visible, indicationGroups, chooseIndication, setProcedureSide, operativeSide, sideSign, canonicalPoint, onOperativeSide, relevantMesh, stepView, baseId, meshSide, meshOffset, scanPickAnchors, pickIdAt, meshCount: meshes.length, vertexCount, draw, activate, choose, configs, select, setTab, setView, enabled, allEnabled, getMeshes: () => meshes.map(({ data, vertexData, procedureCandidates, fissureCache, ...m }) => m), visibleCount: () => meshes.filter(visible).length, getSteps: () => steps, getState: () => ({ palette, viewZoom, isMobile, config: { ...config }, model: modelIndex() + 1, stage, mode, selected, contextAlpha, contextSide, prelabelsOn, opening, beforeCurrent, regionalContext, instrumentsOn, separateLayers, ...cameraState(), distance, pan: [...pan], enabled: { ...enabled }, allEnabled: { ...allEnabled } }), surgicalState, setPalette, opacity, refreshLabels: updateStepLabels,
             // Camera / head-pose API (see the orientation and head-positioning blocks near the top of this file).
-            getCamera: () => ({ q: [...viewQ], frame: camFrame, target: [...target], distance, pan: [...pan], viewZoom }), setCamera, rotateByDrag: (dx, dy) => { stopGlide(); orbitByDrag(dx, dy); render(); }, rollView: a => { stopGlide(); rollView(a); render(); }, attachCamera: f => { attachCamera(f); render(); }, viewBasis: () => ({ M: [...viewBasis().M], target: [...viewBasis().target] }), project, transform, pickAt: (x, y) => { draw(true); cacheLabelVisibility(); const id = pickIdAt(x, y); draw(); return id; }, setSurgeonView,
+            getCamera: () => ({ q: [...viewQ], orbitBasis: [...orbitBasis], screenPlaneOrbit, frame: camFrame, target: camFrame === 'world' ? posePoint(anatomyCenter) : [...anatomyCenter], distance, pan: [...pan], viewZoom }), setCamera, rotateByDrag: (dx, dy) => { stopGlide(); rotateByDrag(dx, dy); render(); }, rollView: a => { stopGlide(); rollView(a); render(); }, attachCamera: f => { attachCamera(f); render(); }, viewBasis: () => ({ M: [...viewBasis().M], target: [...viewBasis().target] }), project, transform, pickAt: (x, y) => { draw(true); cacheLabelVisibility(); const id = pickIdAt(x, y); draw(); return id; }, setSurgeonView,
             getPose: poseState, setPose, setPoseMode, resetPose, gravityInModel, posePoint, poseInverse, posePivot: [...POSE_PIVOT], poseDefault: { ...POSE_DEFAULT },
             // Soft-tissue deformation (curl / peel, incision parting, two-pass regions); see the curl block above.
             stateProgress, movePoint: (i, p) => movePoint(meshes[i], p), getDeformation: i => { const d = deformation(meshes[i]); return d && { curl: d.curl && { key: d.curl.mo.key, progress: d.curl.P, hingeTravel: d.curl.dh, angle: d.curl.T, radius: d.curl.mo.R, dmax: d.curl.mo.dmax }, split: d.split && { kind: d.split.kind, margin: d.split.margin, plane: d.split.plane }, part: d.part && { reveal: d.part.reveal, gap: d.part.gap, sign: d.part.sign }, groove: d.groove, leafCut: !!d.leafCut }; }, curlTuning: CURL_TUNING, variantSnapshot };
@@ -1640,7 +1679,9 @@ if(uSelected>.5)c=mix(c,vec3(.66,1.,.62),.50);if(uIsMarker>.5)c=mix(c,uColor.rgb
         gl.uniform1f(uniforms.Distance, distance);
         gl.uniform1f(uniforms.Aspect, aspect);
         gl.uniform1f(uniforms.Scale, scale * viewZoom); gl.uniform1f(uniforms.LinePx, 2 * LINE_MIN_HALF_PX / (scale * viewZoom * gl.drawingBufferHeight)); gl.uniform1f(uniforms.LineNudge, LINE_NUDGE);
-        gl.uniform2fv(uniforms.Pan, pan);
+        // Scale by w in the vertex shader so the offset is uniform after perspective division.
+        gl.uniform2f(uniforms.Pan, 2 * pan[0] / Math.max(1, host.clientWidth),
+            -2 * pan[1] / Math.max(1, host.clientHeight));
         gl.uniform3fv(uniforms.Target, viewBasis().target);
         gl.uniform1f(uniforms.Pick, picking ? 1 : 0);
         gl.uniform1f(uniforms.Surgical, palette === 'surgical' ? 1 : 0);
@@ -1765,7 +1806,6 @@ if(uSelected>.5)c=mix(c,vec3(.66,1.,.62),.50);if(uIsMarker>.5)c=mix(c,uColor.rgb
         canvas.setPointerCapture(e.pointerId);
     }
     catch (error) { } /* synthetic / already-released pointers cannot be captured */ if (pointers.size === 0) {
-        if (surgeonChosen) animationToken++;
         hadMulti = false;
         dragging = false;
         moved = 0;
@@ -1792,27 +1832,26 @@ if(uSelected>.5)c=mix(c,vec3(.66,1.,.62),.50);if(uIsMarker>.5)c=mix(c,uColor.rgb
         markInteraction();
         if (pinch > 0 && d > 0)
             zoomBy(d / pinch, false);
-        const center = [(p[0][0] + p[1][0]) / 2, (p[0][1] + p[1][1]) / 2], unit = 2 * distance / (scale * viewZoom * Math.max(1, host.clientHeight));
+        const center = [(p[0][0] + p[1][0]) / 2, (p[0][1] + p[1][1]) / 2];
         if (pinchCenter) {
-            pan[0] += (center[0] - pinchCenter[0]) * unit;
-            pan[1] -= (center[1] - pinchCenter[1]) * unit;
+            pan[0] += center[0] - pinchCenter[0];
+            pan[1] += center[1] - pinchCenter[1];
         }
         pinchCenter = center;
         pinch = d;
     }
-    else if (e.shiftKey || e.buttons === 2) {
+    else if (e.shiftKey || (e.buttons & 2)) {
         markInteraction();
-        const unit = 2 * distance / (scale * viewZoom * Math.max(1, host.clientHeight));
-        pan[0] += dx * unit;
-        pan[1] -= dy * unit;
+        pan[0] += dx;
+        pan[1] += dy;
     }
     else if (e.altKey) {
-        const r = canvas.getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+        const r = canvas.getBoundingClientRect(), cx = r.left + r.width / 2 + pan[0], cy = r.top + r.height / 2 + pan[1];
         const angle = (x, y) => Math.atan2(y - cy, x - cx);
         markInteraction(); rollView(-wrapAngle(angle(e.clientX, e.clientY) - angle(last[0], last[1])));
     }
     else {
-        markInteraction(); orbitByDrag(dx, dy);
+        markInteraction(); rotateByDrag(dx, dy);
     } last = [e.clientX, e.clientY]; render(false); };
     canvas.onpointerup = e => { pointers.delete(e.pointerId); if (!dragging && available && !hadMulti) {
         draw(true);
@@ -1822,17 +1861,18 @@ if(uSelected>.5)c=mix(c,vec3(.66,1.,.62),.50);if(uIsMarker>.5)c=mix(c,uColor.rgb
         render();
     } last = null; if (!pointers.size && interactionActive)
         markInteraction(); };
-    canvas.onpointercancel = e => { pointers.delete(e.pointerId); last = null; if (!pointers.size && interactionActive)
-        markInteraction(); };
-    canvas.addEventListener('lostpointercapture', e => {
-        if (pointers.has(e.pointerId))
-            canvas.onpointercancel(e);
-    });
+    function cancelPointer(e) {
+        if (!pointers.delete(e.pointerId)) return;
+        last = null;
+        if (!pointers.size && interactionActive) markInteraction();
+    }
+    canvas.onpointercancel = cancelPointer;
+    canvas.addEventListener('lostpointercapture', cancelPointer);
     window.addEventListener('blur', () => {
+        if (!pointers.size) return;
         pointers.clear();
         last = null;
-        if (interactionActive)
-            markInteraction();
+        markInteraction();
     });
     canvas.oncontextmenu = e => e.preventDefault();
     canvas.addEventListener('wheel', e => { e.preventDefault(); stopGlide(false); markInteraction(); const delta = e.deltaY * (e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? host.clientHeight : 1); zoomBy(Math.exp(-delta * .0015), false); }, { passive: false });
@@ -1846,13 +1886,13 @@ if(uSelected>.5)c=mix(c,vec3(.66,1.,.62),.50);if(uIsMarker>.5)c=mix(c,uColor.rgb
         stopGlide();
         // Arrow keys orbit. Alt/Option + Q/E rolls.
         if (e.key === 'ArrowLeft')
-            orbitByDrag(-.13, 0, 1);
+            rotateByDrag(-.13, 0, 1);
         if (e.key === 'ArrowRight')
-            orbitByDrag(.13, 0, 1);
+            rotateByDrag(.13, 0, 1);
         if (e.key === 'ArrowUp')
-            orbitByDrag(0, .1, 1);
+            rotateByDrag(0, .1, 1);
         if (e.key === 'ArrowDown')
-            orbitByDrag(0, -.1, 1);
+            rotateByDrag(0, -.1, 1);
         if (key === 'q')
             rollView(.1);
         if (key === 'e')
