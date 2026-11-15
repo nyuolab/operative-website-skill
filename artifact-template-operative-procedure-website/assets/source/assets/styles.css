@@ -15,7 +15,7 @@ body {
   margin:0;
   background:var(--paper);
   color:var(--ink);
-  font:14px/1.55 system-ui,-apple-system,sans-serif
+  font:14px/1.55 'DM Sans', system-ui, sans-serif
 }
 
 button,input,select {
@@ -62,7 +62,7 @@ header {
 }
 
 h1 {
-  font:30px/1.25 Georgia,serif;
+  font:30px/1.25 'DM Sans', system-ui, sans-serif;
   letter-spacing:-.6px;
   margin:5px 0
 }
@@ -504,7 +504,7 @@ canvas:active {
 }
 
 .article-text {
-  font:13px/1.85 Georgia,serif;
+  font:13px/1.85 'DM Sans', system-ui, sans-serif;
   color:#425d4e;
   white-space:pre-wrap;
   overflow-wrap:anywhere
@@ -550,7 +550,7 @@ canvas:active {
 
 #figurepanel .fig-title {
   color:#d6e3d7;
-  font:22px Georgia,serif;
+  font:22px 'DM Sans', system-ui, sans-serif;
   margin:0 0 12px
 }
 
@@ -650,7 +650,7 @@ canvas:active {
 }
 
 .sources h2 {
-  font:25px Georgia,serif;
+  font:25px 'DM Sans', system-ui, sans-serif;
   margin:0 0 10px
 }
 
@@ -1363,7 +1363,7 @@ header {
 
 .modelindex strong {
   display:block;
-  font:27px Georgia,serif
+  font:27px 'DM Sans', system-ui, sans-serif
 }
 
 .config select {
@@ -1462,7 +1462,7 @@ header {
 }
 
 .diagram h2 {
-  font:24px Georgia,serif;
+  font:24px 'DM Sans', system-ui, sans-serif;
   color:#d7e5da
 }
 
@@ -1757,7 +1757,7 @@ header p {
 
 .diagram h3 {
   color:#d7e5da;
-  font:20px Georgia,serif
+  font:20px 'DM Sans', system-ui, sans-serif
 }
 
 .separated-note {
@@ -2926,7 +2926,7 @@ header {
 }
 
 #orientGizmo text {
-  font:600 9px system-ui,-apple-system,sans-serif;
+  font:600 9px 'DM Sans', system-ui, sans-serif;
   text-anchor:middle
 }
 
