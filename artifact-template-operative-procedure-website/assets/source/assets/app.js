@@ -1227,10 +1227,22 @@
         line.setAttribute('y2', Math.max(r.y, Math.min(r.y + r.h, a.y)));
         svg.append(line);
     } }
+    function overviewCamera() {
+        const view = stepView(steps[0]);
+        return { ...view, zoom: view.zoom ?? 1 };
+    }
     function setView(v) {
         const views = { anterior: [0, 0], right: [Math.PI / 2, 0], left: [-Math.PI / 2, 0], posterior: [Math.PI, 0], superior: [0, 1.5] };
         if (!views[v]) return;
-        setCamera({ frame: 'head', yaw: views[v][0], pitch: views[v][1] });
+        const { distance, zoom } = overviewCamera();
+        setCamera({ frame: 'head', yaw: views[v][0], pitch: views[v][1], distance, zoom });
+    }
+    function resetView() {
+        // Restore the opening camera and leave the active procedure step in place.
+        stopGlide();
+        cameraExplicit = false;
+        applyCamera(overviewCamera());
+        render();
     }
     // Center the anatomy at the surgeon preset’s orientation and magnification.
     function setSurgeonView() {
@@ -1347,7 +1359,7 @@
             svg += line([0, 0], tip, it.color, it.thin ? 1.3 : 2.6, op) + label(len < 12 ? [tip[0] + (tip[0] >= 0 ? 9 : -9), tip[1] - 8] : [tip[0] * 1.3, tip[1] * 1.3], it.text, it.color, op);
     } box.querySelector('svg').innerHTML = svg + '<circle r="2.4" fill="#d7e5da"/>'; const p = poseShown, posed = POSE_KEYS.some(k => Math.abs(p[k]) > .5); box.querySelector('small').textContent = (posed ? `Pose ${Math.round(p.rotation)}° rot · ${Math.round(p.extension)}° ext${Math.round(p.lateral) ? ` · ${Math.round(p.lateral)}° tilt` : ''}` : 'Anatomical position') + '\n' + (camFrame === 'world' ? 'View fixed to room' : 'View follows head'); }
     $$('[data-view]').forEach(b => b.onclick = () => setView(b.dataset.view));
-    $('#resetView').onclick = () => applyRecommendedView();
+    $('#resetView').onclick = resetView;
     $('#manifestDownload').onclick = () => downloadBlob(new Blob([JSON.stringify(manifest, null, 2)], { type: 'application/json' }), 'pterional-mesh-manifest.json');
     $('#exportPlan').onclick = () => downloadBlob(new Blob([JSON.stringify({ model: modelIndex() + 1, config, steps, papers, side: operativeSide(), contextSide, palette, layers: { relevant: { ...enabled }, all: { ...allEnabled } }, positioning: { operativePose: { ...poseSettings }, defaults: { ...POSE_DEFAULT }, units: 'degrees', pivot: [...POSE_PIVOT], note: 'Rigid rotation of the atlas head about an estimated craniocervical pivot: contralateral rotation, then lateral flexion (positive toward the contralateral shoulder), then extension (vertex toward the floor). Defaults follow the example in Rodriguez Rubio et al.; head holder, pins and table are schematic.' }, rendering: (palette === 'surgical' ? 'Surgical palette: per-tissue shading with baked ambient occlusion and procedural surface texture (porosity, pores, fibres, lobules, faint vessel-like patterns); the texture is decorative, not anatomical.' : 'Atlas palette: manifest teaching colours with simple shading and baked ambient occlusion.') + ' Scalp skin, galea and pericranium are illustrative layered shells. Flaps (scalp, pericranium, temporal fascia, temporalis, dural leaf) peel from the cut toward a straight illustrative hinge and roll over it; reflected scalp-layer flaps are laid toward the face and the dural leaf onto the bone beyond the rim; the incision edges part along the cut. These motions are schematic, not soft-tissue simulation. Colored markings are drawn as smooth tubes resting just above the surface they mark, kept at least about 2.6 device pixels wide on screen; the incision line draws in behind the knife.', limitations: manifest.limitations }, null, 2)], { type: 'application/json' }), 'pterional-model-' + String(modelIndex() + 1).padStart(2, '0') + '-reading-plan.json');
     $('#pdfRequests').onclick = () => downloadBlob(new Blob([papers.map(p => `${p.title}\n${p.citation}\n${p.url}\n`).join('\n')], { type: 'text/plain' }), 'pterional-requested-papers.txt');

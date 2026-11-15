@@ -23,12 +23,13 @@ const start = runtime.indexOf('    // Pterional PR #1 trackball');
 const end = runtime.indexOf("    canvas.addEventListener('webglcontextlost'", start);
 assert(start >= 0 && end > start, 'Camera handlers should be present');
 const events = {}, orbits = [], rolls = [], zooms = [], picks = [], renders = [];
+let resetClicks = 0;
 const canvas = { setPointerCapture() {}, getBoundingClientRect: () => ({left:0,top:0,width:800,height:600}), addEventListener:(k,v)=>events[k]=v };
 const context = {canvas, host:{clientHeight:600}, distance:10, scale:1, viewZoom:1, pan:[0,0], available:true, interactionActive:false,
   window:{addEventListener:(type,callback)=>events[type]=callback},
   stopGlide(){}, markInteraction(){}, render(...a){renders.push(a)}, draw(){}, cacheLabelVisibility(){}, clearSelection(){},
   rotateByDrag:(...a)=>orbits.push(a), rollView:a=>rolls.push(a), zoomBy:(...a)=>zooms.push(a), pickIdAt:()=>7, select:id=>picks.push(id),
-  $:()=>({click(){}}), project:()=>[400,300], anatomyCenter:[0,0,0]};
+  $:selector=>({click(){assert.equal(selector, '#resetView'); resetClicks++}}), project:()=>[400,300], anatomyCenter:[0,0,0]};
 vm.runInNewContext(runtime.slice(start,end), context);
 const event=(x,y,extra={})=>({pointerId:1,clientX:x,clientY:y,button:0,buttons:1,altKey:false,shiftKey:false,preventDefault(){},...extra});
 const move=(x,y,extra)=>canvas.onpointermove(event(x,y,extra));
@@ -60,6 +61,8 @@ canvas.onpointerdown(event(10,10)); events.blur();
 move(25,25); assert.equal(orbits.length,4,'Window blur must clear the gesture');
 const prior=zooms.length; events.wheel({...event(0,0),deltaY:20,deltaMode:0}); canvas.onkeydown({...event(0,0),key:'+'});
 assert.equal(zooms.length,prior+2,'Wheel and keyboard zoom should work');
+canvas.onkeydown(event(0,0,{key:'Home'}));
+assert.equal(resetClicks,1,'Home should invoke Reset View');
 assert(renders.some(x=>x[0]===false),'Camera movement should render without picking every frame');
 // Exercise the actual shared controller with both real camera presets.
 function section(first, last) {
@@ -67,18 +70,24 @@ function section(first, last) {
     assert(a >= 0 && b > a, `Could not find runtime section: ${first}`);
     return runtime.slice(a, b);
 }
-const math = vm.createContext({ sideSign: () => 1, render() {}, stopGlide() {}, host: {clientWidth:800, clientHeight:600}, canonicalPoint:p=>p });
+const resetButton = {};
+const math = vm.createContext({ sideSign: () => 1, render() {}, stopGlide() {}, host: {clientWidth:800, clientHeight:600}, canonicalPoint:p=>p,
+    $:selector=>{assert.equal(selector,'#resetView');return resetButton;} });
 const execute = code => vm.runInContext(code, math);
 execute(`
     let viewQ = [0,0,0,1], camFrame = 'head', cameraExplicit = false;
     let distance = 15, viewZoom = 1.4, pan = [32,-21], poseR = [1,0,0,0,1,0,0,0,1];
     const anatomyCenter = Object.freeze([0, -.35, -.41]), scale = 2.05, aspect = 800/600;
     let viewCache = null;
+    const steps = [{view:{yaw:1,pitch:.25,distance:17}}, {}, {}, {view:{yaw:2,pitch:.7,distance:8.8,zoom:1.44}}];
+    let stage=3, opening=.6, poseOverride='operative', enabled={skin:true};
     ${section('    function qMul(', '    const POSE_PIVOT')}
     ${section('    function viewChanged(', '    function markInteraction(')}
     ${section('    function transform(', '    const smoothstep01')}
     ${section('    function rollView(', '    function meshSide(')}
-    ${section('    function setView(', '    // ---- Patient Position controls')}
+    ${section('    function stepView(', '\n')}
+    ${section('    function overviewCamera(', '    // ---- Patient Position controls')}
+    ${section("    $('#resetView').onclick", '\n')}
     const front = () => mApply(mT(qMat(viewQ)), [0,0,2]);
     const dragDelta = (dx, dy) => {
         const before = viewQ;
@@ -87,15 +96,23 @@ execute(`
     };
 `);
 const near = (a,b) => assert(Math.abs(a-b)<1e-8,`${a} should equal ${b}`);
+execute('applyCamera(stepView(steps[stage])); pan = [.8, -.45];');
+resetButton.onclick();
+assert.deepEqual(Array.from(execute('[distance,viewZoom,...pan]')), [17,1,0,0]);
+assert.deepEqual(Array.from(execute('viewQ')), Array.from(execute('qFromAngles(1,.25)')));
+assert.deepEqual(Array.from(execute('[stage,opening,poseOverride,enabled.skin]')), [3,.6,'operative',true]);
 execute('setSurgeonView()');
 assert.equal(execute('viewZoom'),1,'Surgeon’s View restores its preset magnification');
 for (const preset of ['setSurgeonView()', 'setView("right")', 'setView("superior")',
-    'applyCamera({frame:"head", yaw:1, pitch:.25, zoom:1})', 'setView("anterior")',
+    'resetView()', 'setView("anterior")',
     'setSurgeonView()', 'setView("left")', 'setView("posterior")']) {
-    execute(`pan = [.8, -.45]; viewZoom = 2; ${preset}`);
+    execute(`applyCamera(stepView(steps[stage])); pan = [.8, -.45]; ${preset}`);
     assert.deepEqual(Array.from(execute('pan')), [0,0], `${preset} must clear pan`);
     assert.equal(execute('viewBasis().target === anatomyCenter'),true);
     assert.deepEqual(Array.from(execute('project(anatomyCenter)')), [400,300]);
+    if (preset !== 'setSurgeonView()') {
+        assert.deepEqual(Array.from(execute('[distance,viewZoom]')), [17,1], `${preset} must leave the step close-up`);
+    }
     execute('rotateByDrag(42, -30); rollView(.2)');
     assert.deepEqual(Array.from(execute('project(anatomyCenter)')), [400,300]);
 }
