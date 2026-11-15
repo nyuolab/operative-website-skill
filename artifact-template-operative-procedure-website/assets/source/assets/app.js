@@ -148,22 +148,43 @@
         return viewCache;
     }
     let camGlide = null;
+    // Map the preset's up direction to the orbit controller's +Y axis.
+    let orbitBasis = [0, 0, 0, 1];
+    function orbitBasisFor(up) {
+        if (!up) return [0, 0, 0, 1];
+        const y = vNorm(up);
+        const axis = Math.abs(y[2]) < .9 ? [0, 0, 1] : [0, 1, 0];
+        return qLook(vSub(axis, vScale(y, vDot(y, axis))), y);
+    }
     // Re-express the orientation in another frame at the currently displayed pose.
     function attachCamera(frame) {
         if (frame === camFrame) return;
         const Pq = matQ(poseR);
         const convert = q => qNorm(qMul(q, frame === 'world' ? qConj(Pq) : Pq));
         viewQ = convert(viewQ);
+        orbitBasis = convert(orbitBasis);
         if (camGlide) {
-            camGlide.from.q = convert(camGlide.from.q);
-            camGlide.to.q = convert(camGlide.to.q);
+            for (const pose of [camGlide.from, camGlide.to]) {
+                pose.q = convert(pose.q);
+                pose.orbitBasis = convert(pose.orbitBasis);
+            }
         }
         camFrame = frame;
         viewChanged();
     }
+    function orientCamera(v) {
+        if (v.q) {
+            viewQ = qNorm(v.q);
+            if (v.orbitBasis) orbitBasis = qNorm(v.orbitBasis);
+            else if (v.up) orbitBasis = orbitBasisFor(v.up);
+        } else {
+            viewQ = v.eye ? qLook(v.eye, v.up || [0, 1, 0]) : qFromAngles(v.yaw, v.pitch || 0, v.roll || 0);
+            orbitBasis = orbitBasisFor(v.eye ? v.up : null);
+        }
+    }
     function applyCamera(v) {
         camFrame = v.frame || 'head';
-        viewQ = v.eye ? qLook(v.eye, v.up || [0, 1, 0]) : qFromAngles(v.yaw, v.pitch, v.roll || 0);
+        orientCamera(v);
         if (v.distance != null) distance = v.distance;
         if (v.zoom != null) viewZoom = v.zoom;
         viewChanged();
@@ -173,9 +194,7 @@
         stopGlide();
         cameraExplicit = true;
         if (v.frame && v.frame !== camFrame) attachCamera(v.frame);
-        if (v.q) viewQ = qNorm(v.q);
-        else if (v.eye || v.yaw != null)
-            viewQ = v.eye ? qLook(v.eye, v.up || [0, 1, 0]) : qFromAngles(v.yaw, v.pitch || 0, v.roll || 0);
+        if (v.q || v.eye || v.yaw != null) orientCamera(v);
         if (v.distance != null) distance = v.distance;
         if (v.zoom != null) viewZoom = v.zoom;
         if (v.pan) pan = [...v.pan];
@@ -188,14 +207,16 @@
     function rotateByDrag(dx, dy, k = .008) {
         if (!dx && !dy) return;
         if (orbit?.q !== viewQ) {
-            const M = qMat(viewQ);
+            const relativeView = qMul(viewQ, qConj(orbitBasis));
+            const M = qMat(relativeView);
             const yaw = Math.hypot(M[6], M[8]) > 1e-8 ? Math.atan2(-M[6], M[8]) : Math.atan2(M[2], M[0]);
             const pitch = Math.asin(Math.max(-1, Math.min(1, M[7])));
-            orbit = { yaw, pitch, roll: qMul(viewQ, qConj(qFromAngles(yaw, pitch))) };
+            orbit = { yaw, pitch, roll: qMul(relativeView, qConj(qFromAngles(yaw, pitch))) };
         }
         orbit.yaw = wrapAngle(orbit.yaw + dx * k);
         orbit.pitch = wrapAngle(orbit.pitch + dy * k);
-        viewQ = orbit.q = qNorm(qMul(orbit.roll, qFromAngles(orbit.yaw, orbit.pitch)));
+        const relativeView = qMul(orbit.roll, qFromAngles(orbit.yaw, orbit.pitch));
+        viewQ = orbit.q = qNorm(qMul(relativeView, orbitBasis));
         viewChanged();
     }
     function markInteraction() { interactionActive = true; pickDirty = false; clearTimeout(interactionTimer); interactionTimer = setTimeout(() => { if (pointers.size)
@@ -208,13 +229,14 @@
         d = -d;
     } if (d > .9995)
         return qNorm(a.map((x, i) => x + (b[i] - x) * t)); const th = Math.acos(d), sa = Math.sin((1 - t) * th) / Math.sin(th), sb = Math.sin(t * th) / Math.sin(th); return a.map((x, i) => x * sa + b[i] * sb); }
-    function glideCamera(v, duration = 1000) { attachCamera(v.frame || 'head'); const from = { q: [...viewQ], distance, pan: [...pan], zoom: viewZoom }; applyCamera(v); const to = { q: [...viewQ], distance, pan: [0, 0], zoom: v.zoom ?? 1 }; if (matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    function glideCamera(v, duration = 1000) { attachCamera(v.frame || 'head'); const from = { q: viewQ, orbitBasis, distance, pan: [...pan], zoom: viewZoom }; applyCamera(v); const to = { q: viewQ, orbitBasis, distance, pan: [0, 0], zoom: v.zoom ?? 1 }; if (matchMedia('(prefers-reduced-motion: reduce)').matches) {
         pan = [0, 0];
         viewZoom = to.zoom;
         camGlide = null;
     }
     else {
         viewQ = from.q;
+        orbitBasis = from.orbitBasis;
         distance = from.distance;
         viewZoom = from.zoom;
         camGlide = { from, to, start: performance.now(), duration };
@@ -225,7 +247,7 @@
     function stopGlide(user = true) { camGlide = null; if (user)
         roomCameraAuto = false; }
     function updateGlide() { if (!camGlide || capturing)
-        return; const { from, to } = camGlide, t = Math.max(0, Math.min(1, (poseClock - camGlide.start) / camGlide.duration)), e = smoothstep01(t), mix = (a, b) => a + (b - a) * e; viewQ = qSlerp(from.q, to.q, e); distance = mix(from.distance, to.distance); pan = from.pan.map((x, i) => mix(x, to.pan[i])); viewZoom = mix(from.zoom, to.zoom); viewChanged(); if (t >= 1)
+        return; const { from, to } = camGlide, t = Math.max(0, Math.min(1, (poseClock - camGlide.start) / camGlide.duration)), e = smoothstep01(t), mix = (a, b) => a + (b - a) * e; viewQ = qSlerp(from.q, to.q, e); orbitBasis = qSlerp(from.orbitBasis, to.orbitBasis, e); distance = mix(from.distance, to.distance); pan = from.pan.map((x, i) => mix(x, to.pan[i])); viewZoom = mix(from.zoom, to.zoom); viewChanged(); if (t >= 1)
         camGlide = null;
     else
         render(); }
@@ -426,7 +448,7 @@
     $('#paperSearch').oninput = renderPapers;
     function openPaper(id) { setTab('papers'); $('#paperSearch').value = ''; renderPapers(); $('#paper-' + id)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }
     function captureStepImages() { if (!available || typeof canvas.toDataURL !== 'function')
-        return manifest.study_plates || []; const saved = { viewQ, camFrame, poseOverride, distance, viewZoom, pan: [...pan], selected, opening, procedure, contextSide, separateLayers, enabled: { ...enabled }, allEnabled: { ...allEnabled }, beforeCurrent, regionalContext, hidden: meshes.map(m => m.hidden) }; const s = steps[stage], vside = stepView(s), images = []; capturing = true; try {
+        return manifest.study_plates || []; const saved = { viewQ, orbitBasis, camFrame, poseOverride, distance, viewZoom, pan: [...pan], selected, opening, procedure, contextSide, separateLayers, enabled: { ...enabled }, allEnabled: { ...allEnabled }, beforeCurrent, regionalContext, hidden: meshes.map(m => m.hidden) }; const s = steps[stage], vside = stepView(s), images = []; capturing = true; try {
         viewZoom = 1;
         regionalContext = saved.regionalContext;
         selected = -1;
@@ -456,6 +478,7 @@
     }
     finally {
         viewQ = saved.viewQ;
+        orbitBasis = saved.orbitBasis;
         camFrame = saved.camFrame;
         poseOverride = saved.poseOverride;
         distance = saved.distance;
@@ -1560,7 +1583,7 @@ if(uSelected>.5)c=mix(c,vec3(.66,1.,.62),.50);if(uIsMarker>.5)c=mix(c,uColor.rgb
         available = true;
         window.guideQA = { solidDepth: true, zoomBy, syncMobileLayout, alignActiveStep, updateMobileReaderHeight, changeKind, procedureLabelRegion, activeLabelMesh, fixedLabelRect, visible, indicationGroups, chooseIndication, setProcedureSide, operativeSide, sideSign, canonicalPoint, onOperativeSide, relevantMesh, stepView, baseId, meshSide, meshOffset, scanPickAnchors, pickIdAt, meshCount: meshes.length, vertexCount, draw, activate, choose, configs, select, setTab, setView, enabled, allEnabled, getMeshes: () => meshes.map(({ data, vertexData, procedureCandidates, fissureCache, ...m }) => m), visibleCount: () => meshes.filter(visible).length, getSteps: () => steps, getState: () => ({ palette, viewZoom, isMobile, config: { ...config }, model: modelIndex() + 1, stage, mode, selected, contextAlpha, contextSide, prelabelsOn, opening, beforeCurrent, regionalContext, instrumentsOn, separateLayers, ...cameraState(), distance, pan: [...pan], enabled: { ...enabled }, allEnabled: { ...allEnabled } }), surgicalState, setPalette, opacity, refreshLabels: updateStepLabels,
             // Camera / head-pose API (see the orientation and head-positioning blocks near the top of this file).
-            getCamera: () => ({ q: [...viewQ], frame: camFrame, target: camFrame === 'world' ? posePoint(anatomyCenter) : [...anatomyCenter], distance, pan: [...pan], viewZoom }), setCamera, rotateByDrag: (dx, dy) => { stopGlide(); rotateByDrag(dx, dy); render(); }, rollView: a => { stopGlide(); rollView(a); render(); }, attachCamera: f => { attachCamera(f); render(); }, viewBasis: () => ({ M: [...viewBasis().M], target: [...viewBasis().target] }), project, transform, pickAt: (x, y) => { draw(true); cacheLabelVisibility(); const id = pickIdAt(x, y); draw(); return id; }, setSurgeonView,
+            getCamera: () => ({ q: [...viewQ], orbitBasis: [...orbitBasis], frame: camFrame, target: camFrame === 'world' ? posePoint(anatomyCenter) : [...anatomyCenter], distance, pan: [...pan], viewZoom }), setCamera, rotateByDrag: (dx, dy) => { stopGlide(); rotateByDrag(dx, dy); render(); }, rollView: a => { stopGlide(); rollView(a); render(); }, attachCamera: f => { attachCamera(f); render(); }, viewBasis: () => ({ M: [...viewBasis().M], target: [...viewBasis().target] }), project, transform, pickAt: (x, y) => { draw(true); cacheLabelVisibility(); const id = pickIdAt(x, y); draw(); return id; }, setSurgeonView,
             getPose: poseState, setPose, setPoseMode, resetPose, gravityInModel, posePoint, poseInverse, posePivot: [...POSE_PIVOT], poseDefault: { ...POSE_DEFAULT },
             // Soft-tissue deformation (curl / peel, incision parting, two-pass regions); see the curl block above.
             stateProgress, movePoint: (i, p) => movePoint(meshes[i], p), getDeformation: i => { const d = deformation(meshes[i]); return d && { curl: d.curl && { key: d.curl.mo.key, progress: d.curl.P, hingeTravel: d.curl.dh, angle: d.curl.T, radius: d.curl.mo.R, dmax: d.curl.mo.dmax }, split: d.split && { kind: d.split.kind, margin: d.split.margin, plane: d.split.plane }, part: d.part && { reveal: d.part.reveal, gap: d.part.gap, sign: d.part.sign }, groove: d.groove, leafCut: !!d.leafCut }; }, curlTuning: CURL_TUNING, variantSnapshot };

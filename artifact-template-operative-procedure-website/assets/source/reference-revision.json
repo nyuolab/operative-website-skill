@@ -52,7 +52,8 @@
     "Use the same ACDF camera state, quaternion rotation, pointer gesture mapping and keyboard controls; retain only procedure-specific recommended and Surgeon’s View camera poses.",
     "Use the fixed native anatomy center in every camera preset and throughout gestures.",
     "Remove the vertical orbit clamp and retain elevation across the poles. Keep Surgeon’s View a standard camera-only preset.",
-    "Use CSS-pixel pan after perspective projection in the vertex shader and label projection. Preserve pan and lens zoom when selecting Surgeon’s View."
+    "Use CSS-pixel pan after perspective projection in the vertex shader and label projection. Preserve pan and lens zoom when selecting Surgeon’s View.",
+    "Use each camera preset’s declared up direction for ordinary drag while retaining signed elevation and explicit roll. Preserve the orbit basis across frame changes, camera glides and 2D capture."
   ],
   "geometry": "All six anatomy chunks, material shading and deformation math, CSS and loader remain byte-identical to the upstream reference. Optional Blender export corrects reflected winding."
 }
