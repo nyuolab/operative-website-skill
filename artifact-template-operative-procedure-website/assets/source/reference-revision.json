@@ -49,33 +49,30 @@
     "Keep canvas resolution and shader quality steady during pointer motion. Defer picking until release or cancellation.",
     "Apply optional per-step mesh visibility rules consistently to rendering, picking, labels and capture.",
     "Correct reflected winding in the optional Blender export.",
-    "Use the same ACDF camera state, quaternion rotation, pointer gesture mapping and keyboard controls; retain only procedure-specific recommended and Surgeon’s View camera poses.",
     "Use the fixed native anatomy center in every camera preset and throughout gestures.",
     "Remove the vertical orbit clamp and retain elevation across the poles. Keep Surgeon’s View a standard camera-only preset.",
-    "Use CSS-pixel pan after perspective projection in the vertex shader and label projection. Preserve pan and lens zoom when selecting Surgeon’s View.",
-    "Use each camera preset’s declared up direction for ordinary drag while retaining signed elevation and explicit roll. Preserve the orbit basis across frame changes, camera glides and 2D capture.",
-    "Copy all tracked Pterional website files byte for byte. Clear active pointer gestures after lost capture or window blur.",
     "Soften the exterior skin material without moving Pterional meshes.",
-    "Use the previous screen-plane orbit in Surgeon’s View. Alt/Option enables deliberate roll.",
-    "Use Calibri for the typography changed in the preceding font update."
+    "Use Calibri for the typography changed in the preceding font update.",
+    "Restore Pterional PR #1 trackball, view-space pan, lens zoom, touch twist and keyboard controls. Use one immutable anatomy pivot and clear pan on every camera preset.",
+    "Clear active gestures on cancellation, lost capture or window blur."
   ],
   "geometry": "The current website snapshot retains all six original anatomy chunks and the corrected reflected winding in the optional exporter.",
   "referenceCommit": "bcff83942f3e7005ee645fb12cbecfec9a9a96ca",
   "referenceSha256": {
     ".gitignore": "32b2dd7912ea54e02bcb2d85d94ee2a1fe0e74675f20bbbabeb7823055acb249",
     ".nojekyll": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-    "README.md": "b0d86b6433731205ce025e6a1dbc24f33fd95c6a0e5864ecbc4b84f6d4d8a6f4",
+    "README.md": "38889835251ea520d7000453a7dde3dadff8d393197f6ed2219ccb40654930ea",
     "assets/anatomy-01.bin": "ac5d5bb448459db93cccee4ac8a4c6444128610110a3f050a8c0bfa00a043744",
     "assets/anatomy-02.bin": "c36b60be94604c36d36b3a1a168a732b11c4a9d73d8238c0679366fcb0bce944",
     "assets/anatomy-03.bin": "247335ac39fdadb4b5dcf4ecc00d04f7dc33f7e6d8e11927f911d7882dc928c0",
     "assets/anatomy-04.bin": "00beb26b4752eca0177894463e8e0e3cbb233d858b914b9bc989c767dc364698",
     "assets/anatomy-05.bin": "623d8fd6505b9bb4ea13d6ec01b18bcc2ceea8a9de4acb68e75f14ad98340193",
     "assets/anatomy-06.bin": "285c767a8e2a44e4fdaaed63fc2476b6069c970eab8bd3568b093228fa8a137d",
-    "assets/app.js": "7693163cfea6339ffc8ef44f5db76120e93c12879516c9ff84e89ddcc5e4d682",
+    "assets/app.js": "c7c124c8e7a4b88b0a2357adfce3db3760f4e9311f4d4cd9b4a3416165201358",
     "assets/loader.js": "0c12f76b2846def58df137d74c86d91a8ffd16acffc22189bcedaa32db732049",
     "assets/styles.css": "475fd7b9edc2efe3d79c720bb75fa3c4dbb41a890c1ffb7b0a7643553c7baa10",
     "data/manifest.json": "73e56a520cf93e87eb4a8f9fb3dffe0db18bef45caef4b79329d757c94013cec",
-    "index.html": "17f89a30e99bb3668cffdce202b0dffe711d22f76ab7edd1d241ca85f22ed5e8",
+    "index.html": "5a3f2e2749a585aca70e6b8937d0f00acc9ec75ed664d1e162256f7d181f51ec",
     "tools/anatomy.py": "7d85ed95db8d07013e2ad23a51e9538407fd32b29f73bf46dd820e4f8fbc97db",
     "tools/anatomy_build/ao.py": "87c280b487d7ab450125f9d8803af39ad60e606f61183c59aa01e9556b82880a",
     "tools/anatomy_build/arachnoid.py": "3a1203ba4ce342c3ddb9860eee4e5d70583446e4831b7920c4cd0e9000006825",
@@ -88,5 +85,9 @@
     "tools/anatomy_build/temporal_layers.py": "132bd842aa0d90d16e87b041e9fdc04ce8d30fae25d934f8a3cf5b2bc96a8da5",
     "tools/anatomy_build/veins.py": "c27bd3f173972565ba89e030895afef9f381971837f01e6ec17cf8ca8efe538b",
     "tools/build_anatomy.py": "8048e180f8c8ee2b13d8bccc9ba9d0ce77e47c638bec462657f85474b773a0ba"
+  },
+  "cameraControlsSource": {
+    "pullRequest": 1,
+    "commit": "966eb1b5225768111bf7fe4300a6f14b916d01b7"
   }
 }

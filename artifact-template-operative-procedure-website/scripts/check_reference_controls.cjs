@@ -19,7 +19,7 @@ assert(!/operativeView|setOperativeView/.test(runtime + html), 'Removed camera a
 assert(runtime.includes('interactionActive = true; pickDirty = false'), 'Beginning a gesture must discard queued picking');
 assert(runtime.includes('if (interactionActive)\n        pickDirty = false'), 'Redraws during interaction must suppress picking');
 assert(runtime.includes('if (pointers.size)\n        return; interactionActive = false'), 'A held gesture must not restore full rendering or picking during a slow frame');
-const start = runtime.indexOf('    // One pointer orbits upright');
+const start = runtime.indexOf('    // Pterional PR #1 trackball');
 const end = runtime.indexOf("    canvas.addEventListener('webglcontextlost'", start);
 assert(start >= 0 && end > start, 'Camera handlers should be present');
 const events = {}, orbits = [], rolls = [], zooms = [], picks = [], renders = [];
@@ -28,7 +28,7 @@ const context = {canvas, host:{clientHeight:600}, distance:10, scale:1, viewZoom
   window:{addEventListener:(type,callback)=>events[type]=callback},
   stopGlide(){}, markInteraction(){}, render(...a){renders.push(a)}, draw(){}, cacheLabelVisibility(){}, clearSelection(){},
   rotateByDrag:(...a)=>orbits.push(a), rollView:a=>rolls.push(a), zoomBy:(...a)=>zooms.push(a), pickIdAt:()=>7, select:id=>picks.push(id),
-  $:()=>({click(){}}), wrapAngle:a=>a};
+  $:()=>({click(){}}), project:()=>[400,300], anatomyCenter:[0,0,0]};
 vm.runInNewContext(runtime.slice(start,end), context);
 const event=(x,y,extra={})=>({pointerId:1,clientX:x,clientY:y,button:0,buttons:1,altKey:false,shiftKey:false,preventDefault(){},...extra});
 const move=(x,y,extra)=>canvas.onpointermove(event(x,y,extra));
@@ -39,18 +39,21 @@ move(116,109); assert.deepEqual(orbits[1],[10,7]); move(100,100);
 canvas.onpointerup(event(100,100)); assert.equal(picks.length,0,'Returning a real drag to its start must not select anatomy');
 canvas.onpointerdown(event(200,200)); move(206,200,{altKey:true}); assert.equal(orbits.length,3,'Alt-drag must not orbit the head');
 assert.equal(rolls.length,1,'Alt-drag should roll the camera'); canvas.onpointerup(event(206,200,{altKey:true}));
-canvas.onpointerdown(event(10,10)); move(30,25,{shiftKey:true}); assert.deepEqual(context.pan,[20,15],'Shift drag should pan by its screen delta'); canvas.onpointerup(event(30,25));
+canvas.onpointerdown(event(10,10)); move(30,25,{shiftKey:true});
+assert(Math.abs(context.pan[0]-2/3)<1e-8 && Math.abs(context.pan[1]+.5)<1e-8,'Shift drag should pan by its screen delta at the pivot');
+canvas.onpointerup(event(30,25));
 canvas.onpointerdown(event(10,10)); move(20,20,{buttons:2}); canvas.onpointerup(event(20,20,{button:2}));
 canvas.onpointerdown(event(10,10,{pointerType:'touch'})); move(30,25,{pointerType:'touch'}); assert.equal(orbits.length,4,'Touch drag should orbit after the threshold');
 canvas.onpointerdown(event(100,25,{pointerId:2,pointerType:'touch'})); move(120,60,{pointerId:2,pointerType:'touch'});
-assert.equal(rolls.length,1,'Touch movement must preserve roll');
+assert.equal(rolls.length,2,'Two-finger twist should roll');
+assert(Math.abs(rolls[1])>.1,'Twisting should produce a nonzero roll');
 assert(zooms.some(x=>x[1]===false),'Pinch zoom should avoid immediate picking refresh');
 canvas.onpointerup(event(30,25,{pointerType:'touch'})); canvas.onpointerup(event(120,60,{pointerId:2,pointerType:'touch'})); assert.equal(picks.length,0,'Multi-touch must not select anatomy');
 canvas.onpointerdown(event(10,10)); canvas.onpointerup(event(10,10)); assert.deepEqual(picks,[7],'Click selection should remain immediate');
 canvas.onkeydown({key:'q',code:'KeyQ',preventDefault(){}});
-assert.equal(rolls.length,1,'Q alone must preserve roll');
+assert.equal(rolls.length,3,'Q should roll');
 canvas.onkeydown({key:'œ',code:'KeyQ',altKey:true,preventDefault(){}});
-assert.equal(rolls.length,2,'Option+Q must roll');
+assert.equal(rolls.length,4,'Option+Q should also roll');
 canvas.onpointerdown(event(10,10)); events.lostpointercapture(event(10,10));
 move(20,20); assert.equal(orbits.length,4,'Lost capture must clear the gesture');
 canvas.onpointerdown(event(10,10)); events.blur();
@@ -64,14 +67,16 @@ function section(first, last) {
     assert(a >= 0 && b > a, `Could not find runtime section: ${first}`);
     return runtime.slice(a, b);
 }
-const math = vm.createContext({ sideSign: () => 1, render() {}, stopGlide() {}, viewChanged() {} });
+const math = vm.createContext({ sideSign: () => 1, render() {}, stopGlide() {}, host: {clientWidth:800, clientHeight:600}, canonicalPoint:p=>p });
 const execute = code => vm.runInContext(code, math);
 execute(`
     let viewQ = [0,0,0,1], camFrame = 'head', cameraExplicit = false;
     let distance = 15, viewZoom = 1.4, pan = [32,-21], poseR = [1,0,0,0,1,0,0,0,1];
-    const wrapAngle = a => Math.atan2(Math.sin(a), Math.cos(a));
+    const anatomyCenter = Object.freeze([0, -.35, -.41]), scale = 2.05, aspect = 800/600;
+    let viewCache = null;
     ${section('    function qMul(', '    const POSE_PIVOT')}
-    ${section('    let camGlide = null;', '    function markInteraction(')}
+    ${section('    function viewChanged(', '    function markInteraction(')}
+    ${section('    function transform(', '    const smoothstep01')}
     ${section('    function rollView(', '    function meshSide(')}
     ${section('    function setView(', '    // ---- Patient Position controls')}
     const front = () => mApply(mT(qMat(viewQ)), [0,0,2]);
@@ -83,9 +88,17 @@ execute(`
 `);
 const near = (a,b) => assert(Math.abs(a-b)<1e-8,`${a} should equal ${b}`);
 execute('setSurgeonView()');
-assert.deepEqual(Array.from(execute('pan')), [32,-21], 'Surgeon’s View must retain pan');
-assert.equal(execute('viewZoom'),1.4,'Surgeon’s View must retain lens zoom');
-assert.equal(execute('screenPlaneOrbit'),true);
+assert.equal(execute('viewZoom'),1,'Surgeon’s View restores its preset magnification');
+for (const preset of ['setSurgeonView()', 'setView("right")', 'setView("superior")',
+    'applyCamera({frame:"head", yaw:1, pitch:.25, zoom:1})', 'setView("anterior")',
+    'setSurgeonView()', 'setView("left")', 'setView("posterior")']) {
+    execute(`pan = [.8, -.45]; viewZoom = 2; ${preset}`);
+    assert.deepEqual(Array.from(execute('pan')), [0,0], `${preset} must clear pan`);
+    assert.equal(execute('viewBasis().target === anatomyCenter'),true);
+    assert.deepEqual(Array.from(execute('project(anatomyCenter)')), [400,300]);
+    execute('rotateByDrag(42, -30); rollView(.2)');
+    assert.deepEqual(Array.from(execute('project(anatomyCenter)')), [400,300]);
+}
 for (const [dx,dy] of [[24,0],[0,21],[15,-22],[-20,12]]) {
     const [x,y,z] = execute(`dragDelta(${dx}, ${dy})`);
     assert(Math.hypot(x,y)>.04,'Ordinary drag must orbit');

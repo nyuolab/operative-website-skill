@@ -33,8 +33,8 @@ See the [upstream atlas](https://github.com/Z-Anatomy/Models-of-human-anatomy) a
 
 ## Updated reference and interaction
 
-The bundled reference is a byte-for-byte snapshot of the Pterional Craniotomy website. Its commit and file hashes are pinned in `assets/source/reference-revision.json` inside the skill. It includes the same tissue renderer, pan, camera orbit and Surgeon’s View controls as the website.
+The bundled reference is based on the Pterional Craniotomy website. The base commit, camera source commit and bundled file hashes are recorded in `assets/source/reference-revision.json`.
 
-The dedicated **Operative View** button is removed. Ordinary drag/touch orbits horizontally and vertically around the anatomy while keeping the horizon upright; Alt/Option-drag rolls the camera in place. Ordinary drag moves the anatomy with the pointer and allows a full horizontal turn. The orbit uses the correct eye-direction matrix row to keep repeated movements continuous, including near the overhead pole. Alt/Option with Q or E also rolls. Wheel and pinch zoom, and Shift/right-drag or two-finger movement pans. Reset View and explicit presets still work. The Position step retains its deliberate patient-positioning demonstration.
+The template uses the trackball, pan, zoom and roll from Pterional PR #1. Every camera preset clears pan and rotates around the same skull or spine center. The Surgeon’s View angle and framing are defined for each procedure.
 
 Paper discovery, full-text/PDF intake, figure inspection and evidence mapping remain the first steps. The skill includes the upstream renderer and geometry code, rather than instructions to approximate their appearance. `assets/source/reference-revision.json` (inside the skill folder) records the source revision, exact upstream hashes and the small local differences. The materializer supports the new external manifest and stylesheet; both hosted and standalone builds preserve the same anatomy and rendering.
