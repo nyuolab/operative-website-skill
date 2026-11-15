@@ -2,6 +2,10 @@
     'use strict';
     const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
     const { meshes, manifest } = window.__PTERIONAL_DATA__;
+    // Keep manual orbit centered on the cranial vault rather than POSE_PIVOT (the occipital condyles).
+    // New procedure manifests should supply an anatomy-specific point for this stable orbit anchor.
+    const ORBIT_CENTER = Array.isArray(manifest.orbit_center) && manifest.orbit_center.length === 3
+        ? manifest.orbit_center.map(Number) : [0, -.7, 0];
     const displayConflicts = window.__GUIDE_DATA__?.['clearance-data'] ??
         JSON.parse($('#clearance-data')?.textContent || '{}');
     const clearanceMeshById = new Map(meshes.map(mesh => [mesh.id, mesh]));
@@ -552,10 +556,12 @@
     // returns to the anatomy, which then looks as it did before positioning existed.
     const changed = activeStepId !== steps[stage].id; if (changed && steps[stage].change === 'position' && $('#positionControls'))
         $('#positionControls').open = true; if (changed && steps[stage].change === 'position') {
-        glideCamera(stepView(steps[stage]), 1100);
-        roomCameraAuto = true;
+        if (!surgeonChosen) {
+            glideCamera(stepView(steps[stage]), 1100);
+            roomCameraAuto = true;
+        }
     }
-    else if (changed && (roomCameraAuto || activeStepId === 'position' && camFrame === 'world' && !surgeonChosen)) {
+    else if (changed && !surgeonChosen && (roomCameraAuto || activeStepId === 'position' && camFrame === 'world')) {
         glideCamera(stepView(steps[stage]), 900);
         roomCameraAuto = false;
     } activeStepId = steps[stage].id; applyRecommendedView({ preserveCamera: true }); updateChangeControls(); updateMobileReaderHeight(); alignActiveStep(); if (mode === '2d')
@@ -1243,9 +1249,9 @@
     // coordinates if the camera was room-fixed).
     function setView(v) { const views = { anterior: [0, 0], right: [Math.PI / 2, 0], left: [-Math.PI / 2, 0], superior: [0, 1.5] }; if (!views[v])
         return; stopGlide(); surgeonChosen = false; attachCamera('head'); applyCamera({ frame: 'head', yaw: views[v][0], pitch: views[v][1] }); pan = [0, 0]; render(); }
-    // Surgeon's View (room-framed): from the head of the table, above and behind the vertex, looking down at the
-    // operative field as the seated surgeon sees it (screen up = toward the patient's feet). It is aimed at the bone
-    // window centre at the selected progress. Settle the pose before placing the inspection camera.
+    // Surgeon's View (room-framed): one fixed operative corridor for this procedure, independent of active step.
+    // Keep the paper-supported surgeon position and target stable while the anatomy and instruments advance.
+    // Settle the displayed pose before placing the inspection camera; explicit presets/reset may replace it.
     function setSurgeonView() {
         stopGlide();
         surgeonChosen = true;
@@ -1759,7 +1765,7 @@ if(uSelected>.5)c=mix(c,vec3(.66,1.,.62),.50);if(uIsMarker>.5)c=mix(c,uColor.rgb
     } }); }
     // One pointer orbits upright by default and rolls with Alt/Option held.
     // Shift/right-drag pans; two pointers pan and pinch.
-    let pointers = new Map(), last = null, start = null, moved = 0, dragging = false, pinch = 0, hadMulti = false, pinchCenter = null;
+    let pointers = new Map(), last = null, start = null, moved = 0, dragging = false, pinch = 0, hadMulti = false, pinchCenter = null, orbitPivoted = false;
     const wrapAngle = a => Math.atan2(Math.sin(a), Math.cos(a));
     canvas.onpointerdown = e => { stopGlide(false); try {
         canvas.setPointerCapture(e.pointerId);
@@ -1769,6 +1775,7 @@ if(uSelected>.5)c=mix(c,vec3(.66,1.,.62),.50);if(uIsMarker>.5)c=mix(c,uColor.rgb
         hadMulti = false;
         dragging = false;
         moved = 0;
+        orbitPivoted = false;
         start = [e.clientX, e.clientY];
         markInteraction();
     } pointers.set(e.pointerId, [e.clientX, e.clientY]); if (pointers.size > 1) {
@@ -1812,6 +1819,17 @@ if(uSelected>.5)c=mix(c,vec3(.66,1.,.62),.50);if(uIsMarker>.5)c=mix(c,uColor.rgb
         markInteraction(); rollView(-wrapAngle(angle(e.clientX, e.clientY) - angle(last[0], last[1])));
     }
     else {
+        // Rebase the orbit once, after the drag threshold, without changing the displayed framing.
+        // In the room frame, pose the anatomy-specific model point into room coordinates first.
+        if (!orbitPivoted) {
+            const pivot = camFrame === 'world' ? posePoint(ORBIT_CENTER) : ORBIT_CENTER;
+            const shift = mApply(qMat(viewQ), vSub(pivot, target));
+            pan = vAdd(pan, shift);
+            distance = Math.max(2, distance - shift[2]);
+            target = [...pivot];
+            viewChanged();
+            orbitPivoted = true;
+        }
         markInteraction(); orbitByDrag(dx, dy);
     } last = [e.clientX, e.clientY]; render(false); };
     canvas.onpointerup = e => { pointers.delete(e.pointerId); if (!dragging && available && !hadMulti) {

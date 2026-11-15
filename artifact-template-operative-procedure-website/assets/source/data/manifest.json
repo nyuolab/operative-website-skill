@@ -3,6 +3,12 @@
   "license": "CC BY-SA 4.0; upstream BodyParts3D attribution retained (DBCLS, CC BY-SA 2.1 Japan)",
   "atlas_url": "https://www.z-anatomy.com/",
   "source_sha256": "9f08a17ea0115fed80b2a73ecdf0a1bc2ab2f6956f37c593ce23d513ea35afcd",
+  "orbit_center": [
+    0,
+    -0.7,
+    0
+  ],
+  "orbit_center_note": "Stable visual center of the cranial vault for user orbit; distinct from POSE_PIVOT at the occipital condyles.",
   "transform": {
     "native_origin": [
       0,
