@@ -2,8 +2,6 @@
     'use strict';
     const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
     const { meshes, manifest } = window.__PTERIONAL_DATA__;
-    // Keep manual orbit centered on the cranial vault rather than POSE_PIVOT (the occipital condyles).
-    // New procedure manifests should supply an anatomy-specific point for this stable orbit anchor.
     const displayConflicts = window.__GUIDE_DATA__?.['clearance-data'] ??
         JSON.parse($('#clearance-data')?.textContent || '{}');
     const clearanceMeshById = new Map(meshes.map(mesh => [mesh.id, mesh]));
@@ -597,10 +595,8 @@
     // returns to the anatomy, which then looks as it did before positioning existed.
     const changed = activeStepId !== steps[stage].id; if (changed && steps[stage].change === 'position' && $('#positionControls'))
         $('#positionControls').open = true; if (changed && !cameraExplicit && steps[stage].change === 'position') {
-        if (!cameraExplicit) {
-            glideCamera(stepView(steps[stage]), 1100);
-            roomCameraAuto = true;
-        }
+        glideCamera(stepView(steps[stage]), 1100);
+        roomCameraAuto = true;
     }
     else if (changed && !cameraExplicit && (roomCameraAuto || activeStepId === 'position' && camFrame === 'world')) {
         glideCamera(stepView(steps[stage]), 900);
@@ -1803,7 +1799,6 @@ if(uSelected>.5)c=mix(c,vec3(.66,1.,.62),.50);if(uIsMarker>.5)c=mix(c,uColor.rgb
         draw();
     } }); }
     // One pointer orbits upright by default and rolls with Alt/Option held.
-    // One pointer orbits upright by default and rolls with Alt/Option held.
     // Shift/right-drag pans; two pointers pan and pinch.
     let pointers = new Map(), last = null, start = null, moved = 0, dragging = false, pinch = 0, hadMulti = false, pinchCenter = null;
     const wrapAngle = a => Math.atan2(Math.sin(a), Math.cos(a));
@@ -1866,8 +1861,19 @@ if(uSelected>.5)c=mix(c,vec3(.66,1.,.62),.50);if(uIsMarker>.5)c=mix(c,uColor.rgb
         render();
     } last = null; if (!pointers.size && interactionActive)
         markInteraction(); };
-    canvas.onpointercancel = e => { pointers.delete(e.pointerId); last = null; if (!pointers.size && interactionActive)
-        markInteraction(); };
+    function cancelPointer(e) {
+        if (!pointers.delete(e.pointerId)) return;
+        last = null;
+        if (!pointers.size && interactionActive) markInteraction();
+    }
+    canvas.onpointercancel = cancelPointer;
+    canvas.addEventListener('lostpointercapture', cancelPointer);
+    window.addEventListener('blur', () => {
+        if (!pointers.size) return;
+        pointers.clear();
+        last = null;
+        markInteraction();
+    });
     canvas.oncontextmenu = e => e.preventDefault();
     canvas.addEventListener('wheel', e => { e.preventDefault(); stopGlide(false); markInteraction(); const delta = e.deltaY * (e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? host.clientHeight : 1); zoomBy(Math.exp(-delta * .0015), false); }, { passive: false });
     canvas.onkeydown = e => { if (e.key === 'Escape') {

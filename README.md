@@ -33,7 +33,7 @@ See the [upstream atlas](https://github.com/Z-Anatomy/Models-of-human-anatomy) a
 
 ## Updated reference and interaction
 
-The bundled website now uses the actual code and assets from [pterional-craniotomy PR #1](https://github.com/nyuolab/pterional-craniotomy/pull/1), commit `966eb1b5225768111bf7fe4300a6f14b916d01b7`: Surgical/Atlas tissue shading, baked ambient occlusion, layered scalp, progressive incision and closure, curling/peeling flaps, conforming membranes and surface-following landmarks. It retains Patient Position, Surgeon's View and the orientation gizmo.
+The bundled reference is a byte-for-byte snapshot of the Pterional Craniotomy website. Its commit and file hashes are pinned in `assets/source/reference-revision.json` inside the skill. It includes the same tissue renderer, pan, camera orbit and Surgeon’s View controls as the website.
 
 The dedicated **Operative View** button is removed. Ordinary drag/touch orbits horizontally and vertically around the anatomy while keeping the horizon upright; Alt/Option-drag rolls the camera in place. Ordinary drag moves the anatomy with the pointer and allows a full horizontal turn. The orbit uses the correct eye-direction matrix row to keep repeated movements continuous, including near the overhead pole. Alt/Option with Q or E also rolls. Wheel and pinch zoom, and Shift/right-drag or two-finger movement pans. Reset View and explicit presets still work. The Position step retains its deliberate patient-positioning demonstration.
 

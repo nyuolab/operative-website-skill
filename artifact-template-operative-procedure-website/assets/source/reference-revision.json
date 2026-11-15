@@ -54,7 +54,37 @@
     "Remove the vertical orbit clamp and retain elevation across the poles. Keep Surgeon’s View a standard camera-only preset.",
     "Use CSS-pixel pan after perspective projection in the vertex shader and label projection. Preserve pan and lens zoom when selecting Surgeon’s View.",
     "Use each camera preset’s declared up direction for ordinary drag while retaining signed elevation and explicit roll. Preserve the orbit basis across frame changes, camera glides and 2D capture.",
-    "Orbit in the screen plane in Surgeon’s View to prevent an ordinary drag from adding roll about the view axis. Alt/Option enables roll."
+    "Orbit in the screen plane in Surgeon’s View to prevent an ordinary drag from adding roll about the view axis. Alt/Option enables roll.",
+    "Copy all tracked Pterional website files byte for byte. Clear active pointer gestures after lost capture or window blur."
   ],
-  "geometry": "All six anatomy chunks, material shading and deformation math, CSS and loader remain byte-identical to the upstream reference. Optional Blender export corrects reflected winding."
+  "geometry": "The current website snapshot retains all six original anatomy chunks and the corrected reflected winding in the optional exporter.",
+  "referenceCommit": "a85d1ebed310a7ba54a7a8603661b9f86a7c2f73",
+  "referenceSha256": {
+    ".gitignore": "32b2dd7912ea54e02bcb2d85d94ee2a1fe0e74675f20bbbabeb7823055acb249",
+    ".nojekyll": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "README.md": "c9c2414932cc1774a2de847e12a040432dc209b9e70bad8365f8fcd983e8c0ee",
+    "assets/anatomy-01.bin": "ac5d5bb448459db93cccee4ac8a4c6444128610110a3f050a8c0bfa00a043744",
+    "assets/anatomy-02.bin": "c36b60be94604c36d36b3a1a168a732b11c4a9d73d8238c0679366fcb0bce944",
+    "assets/anatomy-03.bin": "247335ac39fdadb4b5dcf4ecc00d04f7dc33f7e6d8e11927f911d7882dc928c0",
+    "assets/anatomy-04.bin": "00beb26b4752eca0177894463e8e0e3cbb233d858b914b9bc989c767dc364698",
+    "assets/anatomy-05.bin": "623d8fd6505b9bb4ea13d6ec01b18bcc2ceea8a9de4acb68e75f14ad98340193",
+    "assets/anatomy-06.bin": "285c767a8e2a44e4fdaaed63fc2476b6069c970eab8bd3568b093228fa8a137d",
+    "assets/app.js": "15a4d2bc53e21078aa03891941fc9e51d7dd5890f8a77dfcad9341f8645daaad",
+    "assets/loader.js": "0c12f76b2846def58df137d74c86d91a8ffd16acffc22189bcedaa32db732049",
+    "assets/styles.css": "35aa01a6e7a8dd164ff5c715f545389bda7ef58c1cd8427b0dac351f401397d0",
+    "data/manifest.json": "73e56a520cf93e87eb4a8f9fb3dffe0db18bef45caef4b79329d757c94013cec",
+    "index.html": "0c32ef0d92ecd38ca9be3086875d6683f769bd4b5cce96021722eddc12227513",
+    "tools/anatomy.py": "7d85ed95db8d07013e2ad23a51e9538407fd32b29f73bf46dd820e4f8fbc97db",
+    "tools/anatomy_build/ao.py": "87c280b487d7ab450125f9d8803af39ad60e606f61183c59aa01e9556b82880a",
+    "tools/anatomy_build/arachnoid.py": "3a1203ba4ce342c3ddb9860eee4e5d70583446e4831b7920c4cd0e9000006825",
+    "tools/anatomy_build/blender_export.py": "e6505616348705abd1b43799a18d2704d648efb8bccdaf26492a2eea000622eb",
+    "tools/anatomy_build/brain.py": "35c5b837011e3f0f438fe0f8def73ed7d0a332282346101c5f5d5ddf1ba4e0ae",
+    "tools/anatomy_build/common.py": "8c6709b116b36acefbeba125b0826e028fe7ca98214ed2b82f6c1ebb7a634048",
+    "tools/anatomy_build/dura.py": "bf7b4368ad9ef9267ad82059886cfefa3e48258f23e3431576430cbfe767ed55",
+    "tools/anatomy_build/markers.py": "052ace59877d2d8d9cd1241bf15a85085c3bee82c5ceb3adcba35d8697b4187e",
+    "tools/anatomy_build/scalp.py": "a19a54682e6b9cd73610000797aa1192a85b8ada8652a5d105f3cb9abe6a1520",
+    "tools/anatomy_build/temporal_layers.py": "132bd842aa0d90d16e87b041e9fdc04ce8d30fae25d934f8a3cf5b2bc96a8da5",
+    "tools/anatomy_build/veins.py": "c27bd3f173972565ba89e030895afef9f381971837f01e6ec17cf8ca8efe538b",
+    "tools/build_anatomy.py": "8048e180f8c8ee2b13d8bccc9ba9d0ce77e47c638bec462657f85474b773a0ba"
+  }
 }

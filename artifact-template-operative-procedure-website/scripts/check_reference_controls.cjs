@@ -3,7 +3,15 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const assert = require('node:assert/strict');
+const { createHash } = require('node:crypto');
 const source = path.resolve(__dirname, '../assets/source');
+const revision = JSON.parse(fs.readFileSync(path.join(source, 'reference-revision.json'), 'utf8'));
+assert(/^[0-9a-f]{40}$/.test(revision.referenceCommit), 'Record the source website commit');
+assert(revision.referenceSha256['assets/app.js'], 'Pin the actual website runtime');
+for (const [name, hash] of Object.entries(revision.referenceSha256)) {
+    assert.equal(createHash('sha256').update(fs.readFileSync(path.join(source, name))).digest('hex'), hash,
+        `Reference file differs from website commit: ${name}`);
+}
 const runtime = fs.readFileSync(path.join(source, 'assets/app.js'), 'utf8');
 const html = fs.readFileSync(path.join(source, 'index.html'), 'utf8');
 new vm.Script(runtime);
@@ -16,10 +24,10 @@ const end = runtime.indexOf("    canvas.addEventListener('webglcontextlost'", st
 assert(start >= 0 && end > start, 'Camera handlers should be present');
 const events = {}, orbits = [], rolls = [], zooms = [], picks = [], renders = [];
 const canvas = { setPointerCapture() {}, getBoundingClientRect: () => ({left:0,top:0,width:800,height:600}), addEventListener:(k,v)=>events[k]=v };
-const context = {canvas, host:{clientHeight:600}, distance:10, scale:1, viewZoom:1, pan:[0,0], available:true, interactionActive:false, surgeonChosen:false, animationToken:0,
+const context = {canvas, host:{clientHeight:600}, distance:10, scale:1, viewZoom:1, pan:[0,0], available:true, interactionActive:false,
   window:{addEventListener:(type,callback)=>events[type]=callback},
   stopGlide(){}, markInteraction(){}, render(...a){renders.push(a)}, draw(){}, cacheLabelVisibility(){}, clearSelection(){},
-  orbitByDrag:(...a)=>orbits.push(a), rollView:a=>rolls.push(a), zoomBy:(...a)=>zooms.push(a), pickIdAt:()=>7, select:id=>picks.push(id),
+  rotateByDrag:(...a)=>orbits.push(a), rollView:a=>rolls.push(a), zoomBy:(...a)=>zooms.push(a), pickIdAt:()=>7, select:id=>picks.push(id),
   $:()=>({click(){}}), wrapAngle:a=>a};
 vm.runInNewContext(runtime.slice(start,end), context);
 const event=(x,y,extra={})=>({pointerId:1,clientX:x,clientY:y,button:0,buttons:1,altKey:false,shiftKey:false,preventDefault(){},...extra});
@@ -31,7 +39,7 @@ move(116,109); assert.deepEqual(orbits[1],[10,7]); move(100,100);
 canvas.onpointerup(event(100,100)); assert.equal(picks.length,0,'Returning a real drag to its start must not select anatomy');
 canvas.onpointerdown(event(200,200)); move(206,200,{altKey:true}); assert.equal(orbits.length,3,'Alt-drag must not orbit the head');
 assert.equal(rolls.length,1,'Alt-drag should roll the camera'); canvas.onpointerup(event(206,200,{altKey:true}));
-canvas.onpointerdown(event(10,10)); move(30,25,{shiftKey:true}); assert(context.pan[0]!==0 && context.pan[1]!==0,'Shift drag should pan'); canvas.onpointerup(event(30,25));
+canvas.onpointerdown(event(10,10)); move(30,25,{shiftKey:true}); assert.deepEqual(context.pan,[20,15],'Shift drag should pan by its screen delta'); canvas.onpointerup(event(30,25));
 canvas.onpointerdown(event(10,10)); move(20,20,{buttons:2}); canvas.onpointerup(event(20,20,{button:2}));
 canvas.onpointerdown(event(10,10,{pointerType:'touch'})); move(30,25,{pointerType:'touch'}); assert.equal(orbits.length,4,'Touch drag should orbit after the threshold');
 canvas.onpointerdown(event(100,25,{pointerId:2,pointerType:'touch'})); move(120,60,{pointerId:2,pointerType:'touch'});
@@ -50,34 +58,53 @@ move(25,25); assert.equal(orbits.length,4,'Window blur must clear the gesture');
 const prior=zooms.length; events.wheel({...event(0,0),deltaY:20,deltaMode:0}); canvas.onkeydown({...event(0,0),key:'+'});
 assert.equal(zooms.length,prior+2,'Wheel and keyboard zoom should work');
 assert(renders.some(x=>x[0]===false),'Camera movement should render without picking every frame');
-// Exercise the actual orientation math, not only the handler's call to orbitByDrag.
-const mathStart = runtime.indexOf('    function qMul('), mathEnd = runtime.indexOf('    const POSE_PIVOT', mathStart);
-const orbitStart = runtime.indexOf('    function orbitByDrag('), orbitEnd = runtime.indexOf('    function markInteraction(', orbitStart);
-assert(mathStart >= 0 && mathEnd > mathStart && orbitStart >= 0 && orbitEnd > orbitStart);
-const math = vm.createContext({});
-vm.runInContext(`${runtime.slice(mathStart, mathEnd)}\nlet viewQ=[0,0,0,1], camFrame='head', viewCache=null, startQ; function viewChanged(){viewCache=null}\n${runtime.slice(orbitStart,orbitEnd)}`,math);
-const eye = () => Array.from(vm.runInContext('qMat(viewQ).slice(6,9)',math));
-const near = (a,b) => assert(Math.abs(a-b)<1e-5,`${a} should equal ${b}`);
-for(let i=0;i<100;i++)vm.runInContext('orbitByDrag(1,0)',math);
-let direction=eye(); near(direction[0],Math.sin(-.8)); near(direction[2],Math.cos(-.8)); near(direction[1],0);
-for(let i=0;i<50;i++)vm.runInContext('orbitByDrag(0,-1)',math);
-direction=eye(); near(direction[0],Math.cos(-.4)*Math.sin(-.8)); near(direction[1],Math.sin(-.4)); near(direction[2],Math.cos(-.4)*Math.cos(-.8));
-vm.runInContext("camFrame='world';viewQ=qLook([0,1,0],[0,0,1]);orbitByDrag(10,-10)",math);
-direction=eye(); near(direction[0],Math.cos(-.08)*Math.sin(.08)); near(direction[1],Math.cos(-.08)*Math.cos(-.08)); near(direction[2],Math.sin(-.08));
-vm.runInContext("viewQ=qLook([0,0,1],[0,1,0]);camFrame='head';orbitByDrag(1,1)",math);
-assert(eye().every(Number.isFinite),'A drag at the pole must stay finite');
-vm.runInContext("viewQ=qLook([0,0,1],[0,1,0]);orbitByDrag(10,-10)",math);
-const front=Array.from(vm.runInContext('mApply(qMat(viewQ),[0,0,2])',math));
-assert(front[0]>0 && front[1]>0,'Dragging right and up should move a visible front landmark right and up');
-for (const [frame,eye,up,landmark] of [
-  ['head',[0,0,1],[0,1,0],[0,0,2]], ['world',[0,1,0],[0,0,1],[0,2,0]]
-]) {
-  vm.runInContext(`camFrame='${frame}'; viewQ=qLook(${JSON.stringify(eye)},${JSON.stringify(up)}); startQ=[...viewQ]`,math);
-  for (let i=0;i<120;i++) vm.runInContext('orbitByDrag(2*Math.PI/.008/120,0)',math);
-  near(Math.abs(vm.runInContext('viewQ.reduce((sum,value,index)=>sum+value*startQ[index],0)',math)),1);
-  const projected = vm.runInContext(`viewQ=qMul(qAxis([0,0,1],.8),startQ);
-    orbitByDrag(10,-10); mApply(qMat(viewQ),${JSON.stringify(landmark)})`,math);
-  assert(projected[0]>0&&projected[1]>0,'Orbit must follow the pointer after an explicit roll');
+// Exercise the actual shared controller with both real camera presets.
+function section(first, last) {
+    const a = runtime.indexOf(first), b = runtime.indexOf(last, a + first.length);
+    assert(a >= 0 && b > a, `Could not find runtime section: ${first}`);
+    return runtime.slice(a, b);
+}
+const math = vm.createContext({ sideSign: () => 1, render() {}, stopGlide() {}, viewChanged() {} });
+const execute = code => vm.runInContext(code, math);
+execute(`
+    let viewQ = [0,0,0,1], camFrame = 'head', cameraExplicit = false;
+    let distance = 15, viewZoom = 1.4, pan = [32,-21], poseR = [1,0,0,0,1,0,0,0,1];
+    const wrapAngle = a => Math.atan2(Math.sin(a), Math.cos(a));
+    ${section('    function qMul(', '    const POSE_PIVOT')}
+    ${section('    let camGlide = null;', '    function markInteraction(')}
+    ${section('    function rollView(', '    function meshSide(')}
+    ${section('    function setView(', '    // ---- Patient Position controls')}
+    const front = () => mApply(mT(qMat(viewQ)), [0,0,2]);
+    const dragDelta = (dx, dy) => {
+        const before = viewQ;
+        rotateByDrag(dx, dy);
+        return qMul(viewQ, qConj(before));
+    };
+`);
+const near = (a,b) => assert(Math.abs(a-b)<1e-8,`${a} should equal ${b}`);
+execute('setSurgeonView()');
+assert.deepEqual(Array.from(execute('pan')), [32,-21], 'Surgeon’s View must retain pan');
+assert.equal(execute('viewZoom'),1.4,'Surgeon’s View must retain lens zoom');
+assert.equal(execute('screenPlaneOrbit'),true);
+for (const [dx,dy] of [[24,0],[0,21],[15,-22],[-20,12]]) {
+    const [x,y,z] = execute(`dragDelta(${dx}, ${dy})`);
+    assert(Math.hypot(x,y)>.04,'Ordinary drag must orbit');
+    near(z,0);
+}
+const beforeRoll = Array.from(execute('qMat(viewQ).slice(6,9)'));
+const [x,y,z] = execute('const beforeRollQ = viewQ; rollView(.25); qMul(viewQ, qConj(beforeRollQ))');
+near(x,0); near(y,0); assert(Math.abs(z)>.1,'Explicit roll should turn about the sightline');
+Array.from(execute('qMat(viewQ).slice(6,9)')).forEach((v,i)=>near(v,beforeRoll[i]));
+for (const preset of ['setView("anterior")','setSurgeonView()']) {
+    execute(preset);
+    const coords = execute('{ const point = front(); rotateByDrag(10,-10); mApply(qMat(viewQ),point) }');
+    assert(coords[0]>0 && coords[1]>0, 'The front landmark must follow a drag right and up');
+    for (const [dx,dy] of [[1,0],[0,1]]) {
+        execute(preset);
+        const start = Array.from(execute('viewQ'));
+        execute(`for (let i=0;i<160;i++) rotateByDrag(${dx},${dy},2*Math.PI/160)`);
+        near(Math.abs(Array.from(execute('viewQ')).reduce((sum,v,i)=>sum+v*start[i],0)),1);
+    }
 }
 const timerStart=runtime.indexOf('    function markInteraction('), timerEnd=runtime.indexOf('    // Camera glide:',timerStart);
 const timers=[], refreshes=[], held=new Map([[1,[0,0]]]);

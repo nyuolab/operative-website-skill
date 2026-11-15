@@ -1,6 +1,6 @@
 # PR #1 feature and code reuse map
 
-Use the bundled source from [pterional-craniotomy PR #1](https://github.com/nyuolab/pterional-craniotomy/pull/1), head `966eb1b5225768111bf7fe4300a6f14b916d01b7`, merged as `68be79e28960fa2697b63dff71f715cde1e4cbab`. The source files are copied from that revision, not recreated from its description. Consult `assets/source/reference-revision.json` for upstream SHA-256 hashes and intentional differences. Preserve this implementation when adapting a new procedure; replace only case-specific anatomy, content, geometry and controls required by the user's scope.
+Use the exact Pterional Craniotomy website snapshot pinned by commit and SHA-256 in `assets/source/reference-revision.json`. Preserve its renderer and camera controller when adapting a new procedure. Refresh the snapshot from the website when those controls change rather than editing a second camera implementation.
 
 | Feature | Reuse from the reference | Adaptation constraints |
 | --- | --- | --- |
