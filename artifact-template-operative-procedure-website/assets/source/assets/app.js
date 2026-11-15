@@ -147,7 +147,7 @@
     }
     let camGlide = null;
     // Map the preset's up direction to the orbit controller's +Y axis.
-    let orbitBasis = [0, 0, 0, 1];
+    let orbitBasis = [0, 0, 0, 1], screenPlaneOrbit = false;
     function orbitBasisFor(up) {
         if (!up) return [0, 0, 0, 1];
         const y = vNorm(up);
@@ -159,11 +159,8 @@
         if (frame === camFrame) return;
         const Pq = matQ(poseR);
         const convert = q => qNorm(qMul(q, frame === 'world' ? qConj(Pq) : Pq));
-        const continuingOrbit = orbit?.q === viewQ;
         viewQ = convert(viewQ);
         orbitBasis = convert(orbitBasis);
-        // The change of frame transforms both orientations equally.
-        if (continuingOrbit) orbit.q = viewQ;
         if (camGlide) {
             for (const pose of [camGlide.from, camGlide.to]) {
                 pose.q = convert(pose.q);
@@ -174,15 +171,14 @@
         viewChanged();
     }
     function orientCamera(v) {
+        screenPlaneOrbit = v.screenPlaneOrbit ?? false;
         if (v.q) {
             viewQ = qNorm(v.q);
             if (v.orbitBasis) orbitBasis = qNorm(v.orbitBasis);
             else if (v.up) orbitBasis = orbitBasisFor(v.up);
         } else {
             viewQ = v.eye ? qLook(v.eye, v.up || [0, 1, 0]) : qFromAngles(v.yaw, v.pitch || 0, v.roll || 0);
-            // Surgeon’s View starts a level orbit in its preset orientation.
-            // Store yaw, pitch and intentional roll separately just like Normal View.
-            orbitBasis = v.orbitFromPreset ? viewQ : orbitBasisFor(v.eye ? v.up : null);
+            orbitBasis = orbitBasisFor(v.eye ? v.up : null);
         }
     }
     function applyCamera(v) {
@@ -209,6 +205,14 @@
     let orbit = null;
     function rotateByDrag(dx, dy, k = .008) {
         if (!dx && !dy) return;
+        if (screenPlaneOrbit) {
+            // Orbit about axes in the image plane. A preset-up yaw would
+            // also twist around the sightline when looking steeply down.
+            const turn = qAxis([dy, dx, 0], Math.hypot(dx, dy) * k);
+            viewQ = qNorm(qMul(turn, viewQ));
+            viewChanged();
+            return;
+        }
         if (orbit?.q !== viewQ) {
             const relativeView = qMul(viewQ, qConj(orbitBasis));
             const M = qMat(relativeView);
@@ -451,7 +455,7 @@
     $('#paperSearch').oninput = renderPapers;
     function openPaper(id) { setTab('papers'); $('#paperSearch').value = ''; renderPapers(); $('#paper-' + id)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }
     function captureStepImages() { if (!available || typeof canvas.toDataURL !== 'function')
-        return manifest.study_plates || []; const saved = { viewQ, orbitBasis, camFrame, poseOverride, distance, viewZoom, pan: [...pan], selected, opening, procedure, contextSide, separateLayers, enabled: { ...enabled }, allEnabled: { ...allEnabled }, beforeCurrent, regionalContext, hidden: meshes.map(m => m.hidden) }; const s = steps[stage], vside = stepView(s), images = []; capturing = true; try {
+        return manifest.study_plates || []; const saved = { viewQ, orbitBasis, screenPlaneOrbit, camFrame, poseOverride, distance, viewZoom, pan: [...pan], selected, opening, procedure, contextSide, separateLayers, enabled: { ...enabled }, allEnabled: { ...allEnabled }, beforeCurrent, regionalContext, hidden: meshes.map(m => m.hidden) }; const s = steps[stage], vside = stepView(s), images = []; capturing = true; try {
         viewZoom = 1;
         regionalContext = saved.regionalContext;
         selected = -1;
@@ -482,6 +486,7 @@
     finally {
         viewQ = saved.viewQ;
         orbitBasis = saved.orbitBasis;
+        screenPlaneOrbit = saved.screenPlaneOrbit;
         camFrame = saved.camFrame;
         poseOverride = saved.poseOverride;
         distance = saved.distance;
@@ -1290,7 +1295,7 @@
     }
     // Move to the surgeon camera position and keep the user’s pan and lens zoom.
     function setSurgeonView() {
-        setCamera({ frame: 'world', eye: [-.3 * sideSign(), .62, .72], up: [0, 0, 1], distance: 14, orbitFromPreset: true });
+        setCamera({ frame: 'world', eye: [-.3 * sideSign(), .62, .72], up: [0, 0, 1], distance: 14, screenPlaneOrbit: true });
     }
     // ---- Patient Position controls (Layers & View panel) -------------------------------------------------------------
     // Changing the pose re-attaches the camera to the room first (same image), so the head visibly turns while the
@@ -1584,7 +1589,7 @@ if(uSelected>.5)c=mix(c,vec3(.66,1.,.62),.50);if(uIsMarker>.5)c=mix(c,uColor.rgb
         available = true;
         window.guideQA = { solidDepth: true, zoomBy, syncMobileLayout, alignActiveStep, updateMobileReaderHeight, changeKind, procedureLabelRegion, activeLabelMesh, fixedLabelRect, visible, indicationGroups, chooseIndication, setProcedureSide, operativeSide, sideSign, canonicalPoint, onOperativeSide, relevantMesh, stepView, baseId, meshSide, meshOffset, scanPickAnchors, pickIdAt, meshCount: meshes.length, vertexCount, draw, activate, choose, configs, select, setTab, setView, enabled, allEnabled, getMeshes: () => meshes.map(({ data, vertexData, procedureCandidates, fissureCache, ...m }) => m), visibleCount: () => meshes.filter(visible).length, getSteps: () => steps, getState: () => ({ palette, viewZoom, isMobile, config: { ...config }, model: modelIndex() + 1, stage, mode, selected, contextAlpha, contextSide, prelabelsOn, opening, beforeCurrent, regionalContext, instrumentsOn, separateLayers, ...cameraState(), distance, pan: [...pan], enabled: { ...enabled }, allEnabled: { ...allEnabled } }), surgicalState, setPalette, opacity, refreshLabels: updateStepLabels,
             // Camera / head-pose API (see the orientation and head-positioning blocks near the top of this file).
-            getCamera: () => ({ q: [...viewQ], orbitBasis: [...orbitBasis], frame: camFrame, target: camFrame === 'world' ? posePoint(anatomyCenter) : [...anatomyCenter], distance, pan: [...pan], viewZoom }), setCamera, rotateByDrag: (dx, dy) => { stopGlide(); rotateByDrag(dx, dy); render(); }, rollView: a => { stopGlide(); rollView(a); render(); }, attachCamera: f => { attachCamera(f); render(); }, viewBasis: () => ({ M: [...viewBasis().M], target: [...viewBasis().target] }), project, transform, pickAt: (x, y) => { draw(true); cacheLabelVisibility(); const id = pickIdAt(x, y); draw(); return id; }, setSurgeonView,
+            getCamera: () => ({ q: [...viewQ], orbitBasis: [...orbitBasis], screenPlaneOrbit, frame: camFrame, target: camFrame === 'world' ? posePoint(anatomyCenter) : [...anatomyCenter], distance, pan: [...pan], viewZoom }), setCamera, rotateByDrag: (dx, dy) => { stopGlide(); rotateByDrag(dx, dy); render(); }, rollView: a => { stopGlide(); rollView(a); render(); }, attachCamera: f => { attachCamera(f); render(); }, viewBasis: () => ({ M: [...viewBasis().M], target: [...viewBasis().target] }), project, transform, pickAt: (x, y) => { draw(true); cacheLabelVisibility(); const id = pickIdAt(x, y); draw(); return id; }, setSurgeonView,
             getPose: poseState, setPose, setPoseMode, resetPose, gravityInModel, posePoint, poseInverse, posePivot: [...POSE_PIVOT], poseDefault: { ...POSE_DEFAULT },
             // Soft-tissue deformation (curl / peel, incision parting, two-pass regions); see the curl block above.
             stateProgress, movePoint: (i, p) => movePoint(meshes[i], p), getDeformation: i => { const d = deformation(meshes[i]); return d && { curl: d.curl && { key: d.curl.mo.key, progress: d.curl.P, hingeTravel: d.curl.dh, angle: d.curl.T, radius: d.curl.mo.R, dmax: d.curl.mo.dmax }, split: d.split && { kind: d.split.kind, margin: d.split.margin, plane: d.split.plane }, part: d.part && { reveal: d.part.reveal, gap: d.part.gap, sign: d.part.sign }, groove: d.groove, leafCut: !!d.leafCut }; }, curlTuning: CURL_TUNING, variantSnapshot };

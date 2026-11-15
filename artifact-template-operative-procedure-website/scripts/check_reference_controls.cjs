@@ -85,25 +85,16 @@ const near = (a,b) => assert(Math.abs(a-b)<1e-8,`${a} should equal ${b}`);
 execute('setSurgeonView()');
 assert.deepEqual(Array.from(execute('pan')), [32,-21], 'Surgeon’s View must retain pan');
 assert.equal(execute('viewZoom'),1.4,'Surgeon’s View must retain lens zoom');
-assert.deepEqual(Array.from(execute('orbitBasis')), Array.from(execute('viewQ')),
-    'Surgeon’s preset must define yaw and pitch zero');
-// A sequence of individually twist-free quaternion turns can still accumulate
-// roll. Verify a closed mouse path returns the actual camera to its preset.
-function checkClosedDrag(startingRoll) {
-    const start = Array.from(execute('viewQ'));
-    const drag = [[24,15],[8,30],[-18,5],[-14,-50]];
-    for (let repeat=0; repeat<12; repeat++) {
-        for (const [dx,dy] of drag) execute(`rotateByDrag(${dx}, ${dy})`);
-    }
-    near(Math.abs(Array.from(execute('viewQ')).reduce((sum,v,i)=>sum+v*start[i],0)),1);
-    near(Math.abs(Array.from(execute('orbit.roll')).reduce((sum,v,i)=>sum+v*startingRoll[i],0)),1);
+assert.equal(execute('screenPlaneOrbit'),true);
+for (const [dx,dy] of [[24,0],[0,21],[15,-22],[-20,12]]) {
+    const [x,y,z] = execute(`dragDelta(${dx}, ${dy})`);
+    assert(Math.hypot(x,y)>.04,'Ordinary drag must orbit');
+    near(z,0);
 }
-checkClosedDrag([0,0,0,1]);
 const beforeRoll = Array.from(execute('qMat(viewQ).slice(6,9)'));
 const [x,y,z] = execute('const beforeRollQ = viewQ; rollView(.25); qMul(viewQ, qConj(beforeRollQ))');
 near(x,0); near(y,0); assert(Math.abs(z)>.1,'Explicit roll should turn about the sightline');
 Array.from(execute('qMat(viewQ).slice(6,9)')).forEach((v,i)=>near(v,beforeRoll[i]));
-checkClosedDrag(Array.from(execute('orbit.roll')));
 for (const preset of ['setView("anterior")','setSurgeonView()']) {
     execute(preset);
     const coords = execute('{ const point = front(); rotateByDrag(10,-10); mApply(qMat(viewQ),point) }');
