@@ -177,22 +177,18 @@
     function orbitByDrag(dx, dy, k = .008) {
         if (!dx && !dy)
             return;
-        const frameToOrbit = camFrame === 'world' ? qAxis([1, 0, 0], -Math.PI / 2) : [0, 0, 0, 1];
-        const orientation = qMul(viewQ, qConj(frameToOrbit));
-        const M = qMat(orientation);
-        const azimuth = Math.hypot(M[6], M[8]) > 1e-8 ? Math.atan2(M[6], M[8]) : Math.atan2(-M[2], M[0]);
-        const elevation = Math.asin(Math.max(-1, Math.min(1, M[7])));
-        // The up direction is undefined at the poles. Stop just short, and
-        // let a preset already closer to a pole move away without jumping.
-        const limit = 1.52;
-        const levelView = qFromAngles(-azimuth, elevation);
-        const roll = qMul(orientation, qConj(levelView));
-        const cosine = 1 - 2 * roll[2] ** 2, sine = 2 * roll[2] * roll[3];
-        const horizontal = dx * cosine - dy * sine;
-        const vertical = dx * sine + dy * cosine;
-        const nextElevation = Math.max(Math.min(-limit, elevation),
-            Math.min(Math.max(limit, elevation), elevation + vertical * k));
-        viewQ = qNorm(qMul(qMul(roll, qFromAngles(-azimuth + horizontal * k, nextElevation)), frameToOrbit));
+        const M = qMat(viewQ), eye = [M[6], M[7], M[8]], worldFrame = camFrame === 'world';
+        const up = worldFrame ? [0, 0, 1] : [0, 1, 0], h0 = eye[0], h1 = worldFrame ? eye[1] : eye[2];
+        // qMat maps model/world into view coordinates: the third row is the eye direction.
+        // Deriving azimuth from that row avoids first-drag jumps; qLook keeps ordinary orbit upright.
+        const az = Math.hypot(h0, h1) > 1e-5 ? Math.atan2(h0, h1)
+            : worldFrame ? Math.atan2(M[1], -M[0]) : Math.atan2(-M[2], M[0]);
+        const el = Math.asin(Math.max(-1, Math.min(1, worldFrame ? eye[2] : eye[1])));
+        const nextAz = az - dx * k, nextEl = Math.max(-1.52, Math.min(1.52, el + dy * k));
+        const c = Math.cos(nextEl), nextEye = worldFrame
+            ? [c * Math.sin(nextAz), c * Math.cos(nextAz), Math.sin(nextEl)]
+            : [c * Math.sin(nextAz), Math.sin(nextEl), c * Math.cos(nextEl)];
+        viewQ = qLook(nextEye, up);
         viewChanged();
     }
     function markInteraction() { interactionActive = true; pickDirty = false; clearTimeout(interactionTimer); interactionTimer = setTimeout(() => { if (pointers.size)
