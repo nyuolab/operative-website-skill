@@ -49,7 +49,7 @@
     // ---- Free rotation: orientation helpers -----------------------------------------------------------------------
     // Rotations are row-major 3x3 arrays [m00, m01, m02, m10, ...]; quaternions are [x, y, z, w].
     // View space: +x right, +y up, +z toward the viewer. The eye sits at +z = `distance` from the orbit target and the
-    // projection (w = distance - z, then screen-space pan and zoom) is unchanged from the original yaw/pitch renderer.
+    // perspective projection uses w = distance - z. Pan offsets the projected image in CSS pixels.
     // The camera orientation is the quaternion viewQ, which rotates the camera's reference frame (camFrame) into view
     // space:
     //   'head'  - patient model coordinates (+X patient left, +Y superior, +Z anterior). The camera moves with the head,
@@ -697,8 +697,14 @@
     // Model point -> view space (JS mirror of the vertex shader: p = uView * (q - uTarget)).
     function transform(p) { const { M, target: t } = viewBasis(); return mApply(M, [p[0] - t[0], p[1] - t[1], p[2] - t[2]]); }
     // Eye position in the canonical (operative-side = right) model frame used by the fragment shader (vOriginal).
-    function cameraPosition() { const { M, target: t } = viewBasis(); return canonicalPoint(vAdd(t, mApply(mT(M), [-pan[0], -pan[1], distance]))); }
-    function project(p) { const t = transform(p), w = distance - t[2]; return [(t[0] + pan[0]) * scale * viewZoom / aspect / w * host.clientWidth / 2 + host.clientWidth / 2, host.clientHeight / 2 - (t[1] + pan[1]) * scale * viewZoom / w * host.clientHeight / 2]; }
+    function cameraPosition() { const { M, target: t } = viewBasis(); return canonicalPoint(vAdd(t, mApply(mT(M), [0, 0, distance]))); }
+    // Pan is a screen offset in CSS pixels, shared by drawing, picking and labels.
+    function project(p) {
+        const t = transform(p), magnification = scale * viewZoom / (distance - t[2]);
+        const x = (1 + t[0] * magnification / aspect) * host.clientWidth / 2;
+        const y = (1 - t[1] * magnification) * host.clientHeight / 2;
+        return [x + pan[0], y + pan[1]];
+    }
     const smoothstep01 = t => t * t * (3 - 2 * t);
     // ---- Soft-tissue curl / peel ------------------------------------------------------------------------------------
     // Flaps fold by the FLAP CONTRACT shared with the data build (record.flap = {key, pivot, axis, away, lift, radius,
@@ -1258,9 +1264,9 @@
         if (!views[v]) return;
         setCamera({ frame: 'head', yaw: views[v][0], pitch: views[v][1], pan: [0, 0] });
     }
-    // Surgeon’s View is a camera preset using the same center and controls.
+    // Move to the surgeon camera position and keep the user’s pan and lens zoom.
     function setSurgeonView() {
-        setCamera({ frame: 'world', eye: [-.3 * sideSign(), .62, .72], up: [0, 0, 1], distance: 14, zoom: 1, pan: [0, 0] });
+        setCamera({ frame: 'world', eye: [-.3 * sideSign(), .62, .72], up: [0, 0, 1], distance: 14 });
     }
     // ---- Patient Position controls (Layers & View panel) -------------------------------------------------------------
     // Changing the pose re-attaches the camera to the room first (same image), so the head visibly turns while the
@@ -1446,7 +1452,7 @@ q+=uOffset;
 // View: uView = head(model)->view rotation (camera orientation x head pose), uTarget = orbit centre in model space.
 // q/norm are model-space (after flap motion); deformations belong above this line. uGravity (unit, model space) is
 // provided for later gravity-driven deformation and is optimised away while unused.
-if(uLine>0.){float w0=uDistance-(uView*(q-uTarget)).z;q+=norm*max(0.,w0*uLinePx-uLine);}vec3 p=uView*(q-uTarget);vNormal=uView*norm;vObjN=vec3(aNormal.x*uSide,aNormal.yz)/max(vAO,1e-4);float w=uDistance-p.z;vEye=vec3(-(p.x+uPan.x),-(p.y+uPan.y),w);float wz=uLine>0.?max(w-uLineNudge,.05):w;gl_Position=vec4((p.x+uPan.x)*uScale/uAspect,(p.y+uPan.y)*uScale,(1.0125786-1.0062893/wz)*w,w);}`));
+if(uLine>0.){float w0=uDistance-(uView*(q-uTarget)).z;q+=norm*max(0.,w0*uLinePx-uLine);}vec3 p=uView*(q-uTarget);vNormal=uView*norm;vObjN=vec3(aNormal.x*uSide,aNormal.yz)/max(vAO,1e-4);float w=uDistance-p.z;vEye=vec3(-p.x,-p.y,w);float wz=uLine>0.?max(w-uLineNudge,.05):w;gl_Position=vec4(p.x*uScale/uAspect+uPan.x*w,p.y*uScale+uPan.y*w,(1.0125786-1.0062893/wz)*w,w);}`));
         gl.attachShader(program, shader(gl.FRAGMENT_SHADER, `#ifdef GL_FRAGMENT_PRECISION_HIGH
 precision highp float;
 #else
@@ -1644,7 +1650,9 @@ if(uSelected>.5)c=mix(c,vec3(.66,1.,.62),.50);if(uIsMarker>.5)c=mix(c,uColor.rgb
         gl.uniform1f(uniforms.Distance, distance);
         gl.uniform1f(uniforms.Aspect, aspect);
         gl.uniform1f(uniforms.Scale, scale * viewZoom); gl.uniform1f(uniforms.LinePx, 2 * LINE_MIN_HALF_PX / (scale * viewZoom * gl.drawingBufferHeight)); gl.uniform1f(uniforms.LineNudge, LINE_NUDGE);
-        gl.uniform2fv(uniforms.Pan, pan);
+        // Scale by w in the vertex shader so the offset is uniform after perspective division.
+        gl.uniform2f(uniforms.Pan, 2 * pan[0] / Math.max(1, host.clientWidth),
+            -2 * pan[1] / Math.max(1, host.clientHeight));
         gl.uniform3fv(uniforms.Target, viewBasis().target);
         gl.uniform1f(uniforms.Pick, picking ? 1 : 0);
         gl.uniform1f(uniforms.Surgical, palette === 'surgical' ? 1 : 0);
@@ -1796,22 +1804,21 @@ if(uSelected>.5)c=mix(c,vec3(.66,1.,.62),.50);if(uIsMarker>.5)c=mix(c,uColor.rgb
         markInteraction();
         if (pinch > 0 && d > 0)
             zoomBy(d / pinch, false);
-        const center = [(p[0][0] + p[1][0]) / 2, (p[0][1] + p[1][1]) / 2], unit = 2 * distance / (scale * viewZoom * Math.max(1, host.clientHeight));
+        const center = [(p[0][0] + p[1][0]) / 2, (p[0][1] + p[1][1]) / 2];
         if (pinchCenter) {
-            pan[0] += (center[0] - pinchCenter[0]) * unit;
-            pan[1] -= (center[1] - pinchCenter[1]) * unit;
+            pan[0] += center[0] - pinchCenter[0];
+            pan[1] += center[1] - pinchCenter[1];
         }
         pinchCenter = center;
         pinch = d;
     }
-    else if (e.shiftKey || e.buttons === 2) {
+    else if (e.shiftKey || (e.buttons & 2)) {
         markInteraction();
-        const unit = 2 * distance / (scale * viewZoom * Math.max(1, host.clientHeight));
-        pan[0] += dx * unit;
-        pan[1] -= dy * unit;
+        pan[0] += dx;
+        pan[1] += dy;
     }
     else if (e.altKey) {
-        const r = canvas.getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+        const r = canvas.getBoundingClientRect(), cx = r.left + r.width / 2 + pan[0], cy = r.top + r.height / 2 + pan[1];
         const angle = (x, y) => Math.atan2(y - cy, x - cx);
         markInteraction(); rollView(-wrapAngle(angle(e.clientX, e.clientY) - angle(last[0], last[1])));
     }
