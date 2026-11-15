@@ -8,6 +8,12 @@ Use native skin and muscle depth relationships to fit the superficial envelope, 
 
 Fit hardware against the local native support surfaces. Center the footprint on the intended load-bearing anatomy and sample the full contact belt, including triangle interiors where coarse faces can cut across curved bone. Verify the entry point and shape against the applicable technique. Test screw and anchor terminal points in their designated bone, and check their actual trajectories for neighboring bone and neural or vascular structures. A tip-only check gives no information about a shaft. For an instrument, specify entry, shaft axis, working tip, working corridor and intended contacts from evidence and landmarks. Test the full instrument at each sampled phase, including insertion and withdrawal. An interbody decompression tool, for example, follows the open disc space to the target. A tool or implant may have permitted contact with its designated tissue or hardware component.
 
+## Cranial windows and dura
+
+Fit the dural bed to sampled inner-table and cortical surfaces, with the flap base on the documented attachment. Keep the stationary dural margin and the moving leaf complementary. Reveal the incision before curling the leaf and use the same deformation for rendering, picking, labels and reverse closure. Check open, closed and intermediate poses against the rim, scalp, brain and venous sinuses.
+
+Keep the native cortical bone appearance on both ordinary tables. Limit cut-face shading to the actual kerf and verify that it never appears on uncut backfaces. Lift a discrete bone flap free of the fixed rim before carrying it away. Carry the inner table, outer table and cut edges as one object, then reuse the motion in reverse for replacement. Check the fully seated state for seams, duplicate surfaces and exposed interiors.
+
 ## Sample and check
 
 Use the finished site’s state to sample each variant, operative side and relevant layer context. Sample the separate Before frame, start, end, every intermediate boundary where motion or visibility changes, and intermediate poses through each nonlinear movement. Include sufficient resolution near narrow spaces. Export model-space triangles with the same cut and deformation as the renderer. Include the full geometry for both the shaft and working tip. The audit measures strict triangle crossings in sampled poses. Check coplanar overlaps, enclosed meshes, self-intersection, clinical relevance and continuity between samples separately.

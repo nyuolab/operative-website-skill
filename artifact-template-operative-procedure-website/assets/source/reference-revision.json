@@ -47,10 +47,11 @@
     "Discard pending pick work at drag start and suppress picking-buffer render and synchronous pixel readback during active movement, including pose-animation redraws.",
     "Update accessible gesture instructions, reference documentation and interaction regression checks.",
     "Keep canvas resolution and shader quality steady during pointer motion. Defer picking until release or cancellation.",
-    "Keep Surgeon\u2019s View fixed to one evidence-based procedure corridor across all steps and pose transitions; suppress automatic step camera glides while this view is selected.",
     "Apply optional per-step mesh visibility rules consistently to rendering, picking, labels and capture.",
     "Correct reflected winding in the optional Blender export.",
-    "Use the same ACDF camera state, quaternion rotation, pointer gesture mapping and keyboard controls; retain only procedure-specific recommended and Surgeon\u2019s View camera poses."
+    "Use the same ACDF camera state, quaternion rotation, pointer gesture mapping and keyboard controls; retain only procedure-specific recommended and Surgeon’s View camera poses.",
+    "Use the fixed native anatomy center in every camera preset and throughout gestures.",
+    "Remove the vertical orbit clamp and retain elevation across the poles. Keep Surgeon’s View a standard camera-only preset."
   ],
   "geometry": "All six anatomy chunks, material and deformation shaders, CSS and loader remain byte-identical to the upstream reference. Optional Blender export corrects reflected winding."
 }
