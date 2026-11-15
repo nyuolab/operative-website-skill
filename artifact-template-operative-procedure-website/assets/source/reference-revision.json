@@ -50,6 +50,8 @@
     "Update accessible gesture instructions, reference documentation and interaction regression checks.",
     "Keep canvas resolution and shader quality steady during pointer motion. Defer picking until release or cancellation.",
     "Use consistent room and head orbit bases, preserve explicit Alt/Option roll across orbit, and pause scene playback when selecting or inspecting Surgeon’s View.",
+    "Add a procedure-specific orbit_center distinct from the patient pose pivot, and rebase to it once on the first above-threshold one-pointer orbit while compensating pan and distance to avoid a framing snap.",
+    "Keep Surgeon’s View fixed to one evidence-based procedure corridor across all steps and pose transitions; suppress automatic step camera glides while this view is selected.",
     "Apply optional per-step mesh visibility rules consistently to rendering, picking, labels and capture.",
     "Correct reflected winding in the optional Blender export."
   ],
