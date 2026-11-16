@@ -817,9 +817,6 @@ canvas:active {
   .sectionintro {
     padding:18px
   }
-  .step {
-    padding:18px
-  }
   .viewhead {
     padding:0 12px
   }
@@ -841,12 +838,6 @@ canvas:active {
   }
   .visual {
     display:none
-  }
-  .side {
-    height:auto
-  }
-  .scroll {
-    overflow:visible
   }
   .step {
     break-inside:avoid
@@ -1602,12 +1593,6 @@ header {
   .visual {
     height:720px
   }
-  .side {
-    height:760px
-  }
-  .config legend {
-    font-size:8px
-  }
   .choices span {
     font-size:10px
   }
@@ -1818,18 +1803,11 @@ header p {
   .config fieldset {
     flex:1 1 44%
   }
-  .layout {
-    display:flex;
-    height:auto
-  }
   .visual {
     height:680px
   }
   .side {
     height:760px
-  }
-  .reference-plates {
-    grid-template-columns:1fr
   }
 }
 
@@ -2033,9 +2011,6 @@ header h1 {
   .step h2 {
     font-size:13px
   }
-  .step p {
-    font-size:11px
-  }
   .side .tabs {
     gap:12px;
     padding:0 12px
@@ -2069,9 +2044,6 @@ header h1 {
   }
   .step {
     padding:11px 15px
-  }
-  .step p {
-    font-size:12px
   }
   .step h2 {
     font-size:14px

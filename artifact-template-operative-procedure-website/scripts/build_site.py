@@ -81,23 +81,14 @@ def main():
  body_tags=list(re.finditer(r'<body\b[^>]*>',html,re.I))
  if len(body_tags)!=1:raise SystemExit('Expected one body tag; update the loading insertion for this HTML.')
  body_tag=body_tags[0].group(0)
- hosted=html.replace('<!-- GUIDE_DATA -->','').replace('<!-- GUIDE_RUNTIME -->','<script defer src="assets/loader.js"></script>').replace(body_tag,body_tag+loading,1)
+ loader_tag=(f'<script defer src="assets/loader.js" data-anatomy-chunks="{len(chunks)}" '
+             f'data-mesh-count="{len(data["mesh-data"])}"></script>')
+ hosted=html.replace('<!-- GUIDE_DATA -->','').replace('<!-- GUIDE_RUNTIME -->',loader_tag).replace(body_tag,body_tag+loading,1)
  (site/'index.html').write_text(hosted);(assets/'app.js').write_text(runtime)
  for path,name in static_files:
   target=site/name;target.parent.mkdir(parents=True,exist_ok=True);shutil.copy2(path,target)
- loader=r'''(async()=>{'use strict';
-const files=__FILES__, expectedMeshCount=__COUNT__, message=document.getElementById('guide-loading-message');
-try{
- if(typeof DecompressionStream==='undefined')throw new Error('Please open this guide in a current version of Chrome, Edge, Firefox or Safari.');
- let completed=0;
- const stream=new ReadableStream({async start(controller){try{for(const file of files){const response=await fetch(file);if(!response.ok)throw new Error('Anatomy data could not be loaded ('+response.status+').');const reader=response.body.getReader();while(true){const {done,value}=await reader.read();if(done)break;controller.enqueue(value)}message.textContent='Loading Anatomy… '+Math.round(++completed/files.length*100)+'%'}controller.close()}catch(error){controller.error(error)}}});
- const data=await new Response(stream.pipeThrough(new DecompressionStream('gzip'))).json();
- if(!Array.isArray(data['mesh-data'])||data['mesh-data'].length!==expectedMeshCount)throw new Error('Anatomy data is incomplete. Please refresh the page.');
- window.__GUIDE_DATA__=data;
- const script=document.createElement('script');script.src='assets/app.js';script.onload=()=>document.getElementById('guide-loading')?.remove();script.onerror=()=>{message.textContent='The guide could not be loaded. Please refresh the page.'};document.body.append(script);
-}catch(error){message.textContent=error.message||'Anatomy could not be loaded. Please refresh the page.';console.error(error)}
-})();'''.replace('__FILES__',json.dumps(chunks)).replace('__COUNT__',str(len(data['mesh-data'])))
- (assets/'loader.js').write_text(loader)
+ loader=Path(__file__).resolve().parent.parent/'assets/source/assets/loader.js'
+ shutil.copyfile(loader,assets/'loader.js')
  (site/'_headers').write_text('/assets/anatomy-*.bin\n  Content-Type: application/octet-stream\n  Cache-Control: public, max-age=0, must-revalidate\n/*\n  X-Content-Type-Options: nosniff\n  Referrer-Policy: strict-origin-when-cross-origin\n')
  (site/'netlify.toml').write_text('[build]\n  publish = "."\n')
  attribution=project/'ATTRIBUTION.md'
