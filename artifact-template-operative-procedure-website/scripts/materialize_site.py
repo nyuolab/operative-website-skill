@@ -58,6 +58,9 @@ def main():
     for folder in ['src', 'data', 'research', 'static']:
         (dest / folder).mkdir(parents=True)
     shutil.copytree(source, dest / 'baseline')
+    figures = source / 'assets/source-figures'
+    if figures.is_dir():
+        shutil.copytree(figures, dest / 'static/assets/source-figures')
     (dest / 'src/index.html').write_text(html)
     (dest / 'src/app.js').write_text(runtime)
     for key, value in payloads.items():

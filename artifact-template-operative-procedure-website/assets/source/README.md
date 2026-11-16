@@ -73,6 +73,10 @@ python3 tools/anatomy.py pack /tmp/pterional-meshes.json
 
 `pack` checks the record count against the manifest's `structure_count`. If you add or remove meshes, update the manifest; a rebuild does this for you. Hand edits are overwritten by the next rebuild, so put lasting changes in a build step.
 
+## Reading the guide
+
+Open **Step notes & sources** for anatomical context and linked citations. The first step also has **Approach background**. Open **2D Figures** to see the bundled paper images. When a paper does not show the exact action, the guide labels the closest available image as a related figure. Black lines at skin preparation show the planned ink marking.
+
 ## Camera and patient positioning
 
 - **Camera controls.** Drag to rotate in any direction around the midpoint of the cranial vault. Shift/right-drag pans, and two fingers pan, pinch to zoom and twist to roll. Alt/Option-drag and Q/E roll, arrow keys rotate, and the wheel or plus/minus zooms. Anterior, Right, Left, Posterior and Top center the skull at the opening scale. Reset View and Home restore the opening camera while keeping the current step. Recommended View and Focus Change show the current step’s detail.
