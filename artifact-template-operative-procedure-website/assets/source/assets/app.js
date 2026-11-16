@@ -297,7 +297,7 @@
     function downloadBlob(blob, name) { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 10000); }
     function decode64(s) { const str = atob(s), bytes = new Uint8Array(str.length); for (let i = 0; i < str.length; i++)
         bytes[i] = str.charCodeAt(i); return bytes; }
-    function setTab(t) { for (const k of ['steps', 'indications', 'papers']) {
+    function setTab(t) { for (const k of ['overview', 'steps', 'indications', 'papers']) {
         $('#tab-' + k).setAttribute('aria-selected', k === t);
         $('#' + k + '-panel').hidden = k !== t;
     } if (t === 'steps') {
@@ -305,6 +305,15 @@
         alignActiveStep();
     } }
     $$('[role=tab]').forEach(b => b.onclick = () => setTab(b.id.slice(4)));
+    const readingLayout = $('.layout'), readingToggle = $('.reading-toggle');
+    readingToggle.addEventListener('click', () => {
+        const expanded = readingLayout.classList.toggle('reading-expanded');
+        readingToggle.setAttribute('aria-pressed', String(expanded));
+        readingToggle.setAttribute('aria-label', expanded ? 'Restore model view' : 'Expand reading panel');
+        readingToggle.title = expanded ? 'Restore model view' : 'Expand reading panel';
+        readingToggle.textContent = expanded ? '›' : '‹';
+        window.dispatchEvent(new Event('resize'));
+    });
     function setMode(next) { animationToken++; mode = next; $('#mode3d').setAttribute('aria-pressed', mode === '3d'); $('#mode2d').setAttribute('aria-pressed', mode === '2d'); for (const s of ['#canvas', '#viewinfo', '.floating', '#gesturehint', '.viewtools', '#mobileModelDock', '#stepLabels', '#labelLines', '#orientGizmo'])
         $(s).toggleAttribute('hidden', mode !== '3d'); $('#figurepanel').hidden = mode === '3d'; $('#popup').hidden = true; if (mode === '2d') {
         $('#labelLines').replaceChildren();

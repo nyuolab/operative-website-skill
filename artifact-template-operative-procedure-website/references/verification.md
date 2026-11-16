@@ -53,3 +53,7 @@ Deliver a short report separating: source/anatomy limitations, known illustrativ
 ## Video verification
 
 When an article includes a video, verify it was reviewed from start to finish and reconcile the observed action/time map against the article, step order and each extracted 2D frame. Identify any unseen segment, missing action or uncertain mapping explicitly. For supplied playable files, test the collapsed and expanded video disclosure on desktop and mobile; check that the tabs move below it and remain usable. Check initial, next, previous, direct and rapid step selections with the player open and closed; verify the latest seek after delayed metadata, paused/playing state preservation, steps without timestamps, keyboard controls, and missing/failed media. Verify guide and camera state survives disclosure and seeking. Check that media and extracted frames are included only where distribution rights permit.
+
+## Overview and reader checks
+
+Check the clinical overview against its cited sources and distinguish study findings from patient outcomes. Confirm the writing is sufficiently detailed and appropriate for a medical student, without first-person practice claims. Verify Overview, Guide, Indications and Papers tab selection and the approximately 40/60 expanded desktop split, full use of reader width, restoration, mobile layout, keyboard operation, and preservation of step and camera state.

@@ -66,3 +66,9 @@ In **2D Figures**, show a bundled original source figure for every active step a
 For a supplied operative video file, place a collapsed, keyboard-accessible Operative Video disclosure immediately above the Guide / Indications / Papers tabs. Expanding it pushes the tabs and reader below the player in normal flow; collapsing it restores their space. Fit the desktop panel and the mobile reader without clipping, overlap, or breaking internal scrolling. Include source attribution and native controls. Do not autoplay.
 
 Map each actually shown guide step to a verified timestamp. Every change of the active step seeks to that time whether the disclosure is open or closed; preserve the user's paused/playing state and do not reset the model camera or other guide state. Queue the most recent seek until video metadata loads. A step absent from the footage is explicitly labeled as unavailable and has no invented seek. Video frames in 2D Figures are independently identified, timestamped and credited. Handle missing or unsupported media without blocking the guide.
+
+## Clinical overview and reading expansion
+
+Provide an Overview tab with a substantial, cited teaching page tailored to the operation or single-article case. Address anatomy, indications, preoperative reasoning, outcomes and complications with the specificity supported by the sources. Use clear, moderately advanced third-person clinical prose for a second-year medical student; avoid both oversimplified coaching and unsupported first-person expert preference. Separate an anatomical study's observations from clinical outcomes.
+
+Keep the normal layout visual-first. An accessible boundary control expands the reading panel to approximately 60% of the desktop layout and restores the original split; the article uses the panel's available width. On mobile the expanded reader takes most of the vertical space without covering controls. Retain the active tab, step and camera when toggling.
