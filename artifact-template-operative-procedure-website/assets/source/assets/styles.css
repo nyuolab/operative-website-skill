@@ -2957,3 +2957,23 @@ header {
 .source-figure-panel .source-figure-image { display: block; margin-bottom: .5rem; }
 .source-figure-panel .source-figure img { max-width: 100%; max-height: min(62vh, 47rem); object-fit: contain; }
 .source-figure figcaption p { margin: .38rem 0; }
+
+/* Expandable clinical overview */
+.visual { position:relative }
+.reading-toggle { position:absolute; z-index:18; top:50%; right:0; transform:translateY(-50%); min-width:34px; min-height:58px; border:1px solid #708575; border-right:0; border-radius:7px 0 0 7px; background:#e8eee2; color:#294235; font-size:18px; cursor:pointer }
+.reading-toggle:hover,.reading-toggle:focus-visible { background:#d3e3cf }
+.layout.reading-expanded { grid-template-columns:minmax(0, 40fr) minmax(0, 60fr)!important }
+.clinical-overview { padding:22px 24px 45px; color:#293d31; font-size:14px; line-height:1.65 }
+.clinical-overview h2 { font-size:21px; line-height:1.25; margin:0 0 12px }
+.clinical-overview h3 { font-size:15px; margin:20px 0 5px }
+.clinical-overview p { margin:0 0 11px }
+.clinical-overview ul { margin:6px 0 12px; padding-left:20px }
+.clinical-overview a { color:#315f45; text-decoration:underline }
+.clinical-overview .overview-source { font-size:12px; overflow-wrap:anywhere }
+@media(max-width:760px) {
+ .layout.reading-expanded { grid-template-columns:minmax(0,1fr)!important; grid-template-rows:minmax(85px,22fr) minmax(0,78fr)!important }
+ .reading-toggle { top:auto; left:8px; right:auto; bottom:0; transform:none; min-width:44px; min-height:34px; border:1px solid #708575; border-radius:7px 7px 0 0 }
+ .clinical-overview { padding:16px 16px 35px; font-size:14px }
+ .side .tabs { gap:6px; overflow-x:auto; flex-shrink:0 }
+ .side .tabs button { white-space:nowrap }
+}
