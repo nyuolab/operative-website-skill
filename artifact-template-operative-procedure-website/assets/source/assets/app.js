@@ -1117,7 +1117,8 @@
             `<a href="${escape(paper.url)}" title="${escape(paper.citation || paper.title)}" aria-label="${escape(paper.citation || paper.title)}" target="_blank" rel="noopener noreferrer">[${i + 1}]</a>`);
         if (reading) links.push(sourceLink(reading.url, 'Atlas'));
         return `<details class="study-notes"><summary>Details</summary>
-            <p>${escape(entry.detail)}${links.length ? ` <span class="study-reference-links">${links.join(' ')}</span>` : ''}</p></details>`;
+            <p>${escape(entry.detail)}${links.length ? ` <span class="study-reference-links">${links.join(' ')}</span>` : ''}</p>
+            ${citations.length || reading ? `<h4>Sources for this step</h4><ul class="study-citations">${citations.map(paper => `<li>${sourceLink(paper.url, paper.citation || paper.title)}</li>`).join('')}${reading ? `<li>${sourceLink(reading.url, reading.label || 'Atlas')}</li>` : ''}</ul>` : ''}</details>`;
     }
 
     function stepFigures(step) {

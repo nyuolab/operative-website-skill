@@ -62,7 +62,8 @@
     "Remove unused Pterional helpers and repeated style rules. Use the same native-stream anatomy loader and data reader in the reference and generated guides.",
     "Replace model captures with cited publications in 2D Figures, add expandable cited study notes and approach background, and distinguish skin ink from teaching marks.",
     "Bundle the source figures and use labeled related figures for steps without a direct illustration. Preserve step construction and include figure assets in offline and hosted project builds.",
-    "Use one compact Details disclosure, compact citations, and a skin-surface ink mask that persists after marking. Hide the anatomy leader in 2D mode."
+    "Use one compact Details disclosure, compact citations, and a skin-surface ink mask that persists after marking. Hide the anatomy leader in 2D mode.",
+    "List full linked step-specific sources inside Details, alongside citation markers."
   ],
   "geometry": "The current website snapshot retains all six original anatomy chunks and the corrected reflected winding in the optional exporter.",
   "referenceCommit": "bcff83942f3e7005ee645fb12cbecfec9a9a96ca",
@@ -77,7 +78,7 @@
     "assets/anatomy-04.bin": "00beb26b4752eca0177894463e8e0e3cbb233d858b914b9bc989c767dc364698",
     "assets/anatomy-05.bin": "623d8fd6505b9bb4ea13d6ec01b18bcc2ceea8a9de4acb68e75f14ad98340193",
     "assets/anatomy-06.bin": "285c767a8e2a44e4fdaaed63fc2476b6069c970eab8bd3568b093228fa8a137d",
-    "assets/app.js": "65f0f678e4f65b55663bb819b62a13b1ad5815026fed53be3e82a378a9b7d2eb",
+    "assets/app.js": "37c94a9a55788e8285f3419fc10fe365c519eef39e95898e32aa5bf974d012ce",
     "assets/loader.js": "f935993211d094c09583117db79f32f0f42989cbe6fa7e6e08bcaf1b27fd1423",
     "assets/source-figures/pterional/701_2025_6423_fig1_html.jpg": "0d870fc30d462e829ddf3347ec509ffbd1ffb382b67b0b9485f24edc950a75b3",
     "assets/source-figures/pterional/701_2025_6423_fig2_html.jpg": "41b824f09a7b452ef54611c7f6f55d87e629fcff59fc4c2ed25aefefaa5b5ddb",

@@ -11,6 +11,10 @@ The bundled reference includes regional cranial meshes. If the requested region 
 
 For an existing guide, edit the affected source in place. Reuse its evidence and geometry; restart research only for a new procedure or unsupported clinical change. Do not regenerate unchanged anatomy for a text, style or input-control edit.
 
+## Work proportionately
+
+For an existing guide, change the affected frontend, content, or procedure state in place; reuse evidence, geometry, and compressed anatomy assets. Research is required for a new procedure or an unsupported clinical change. Run focused checks on changed controls, states, sources, laterality, and geometry as applicable. Do not regenerate unchanged assets, build every export, or repeat unaffected checks. A new guide or substantial anatomical change warrants the broader review described below; a routine frontend edit does not.
+
 ## 1. Research first, then request PDFs
 
 Read [research and source handling](references/research.md). Materialize a new project shell with the helper described in section 3 before saving intake there; this shell preparation does not establish a new procedure. Resume an existing materialized project on later PDF uploads instead of materializing into it again. Identify the named procedure, anatomical region, intended extent and any variants the user explicitly wants. A single procedure is the default. Do not invent top-level option groups. For a requested procedure family, derive the option axes from the user's scope and evidence; clarify only consequential ambiguity.
@@ -47,7 +51,7 @@ Preserve Surgical/Atlas palettes, per-tissue shading and baked ambient occlusion
 
 Read [verification and review](references/verification.md). Run syntax, data, state/branch, laterality, geometry and interaction checks appropriate to the new case. Inspect the actual website in a permitted browser when available; never bypass a browser-access denial or call a software projection a browser screenshot.
 
-After the website is complete, use a separate review agent when available to inspect the whole site against the supplied papers and this contract, including every variant and both sides. Have it report concrete inconsistencies and fix them in the working project, with bounded ownership of edits. Recheck affected behavior. If delegation is unavailable, perform the same audit and state that review was not independent. Avoid claiming perfection, clinical validation, or successful live rendering without evidence.
+For a new guide or substantial anatomy or sequence change, use a separate review agent when available and appropriate to inspect the changed anatomy, applicable sources, variants and sides. Routine frontend edits need only focused checks. Have it report concrete inconsistencies and fix them in the working project, with bounded ownership of edits. Recheck affected behavior. If delegation is unavailable, perform the same audit and state that review was not independent. Avoid claiming perfection, clinical validation, or successful live rendering without evidence.
 
 ## 5. Deliver
 
@@ -57,10 +61,18 @@ Deliver a complete editable static site with root `index.html`, all runtime/anat
 
 ## Study text, paper figures and skin marking
 
-Keep the short step summary visible. Follow it with one compact **Details** dropdown and one paragraph that explains the anatomy, purpose and relationships at a medical student level. Use the first step to introduce the approach. Put short citation markers at the end of each paragraph and keep full references in Papers. Use an atlas chapter when available. Identify model-only reversals and reconstruction choices.
+Keep the short step summary visible. Follow it with one compact **Details** dropdown and one paragraph that explains the anatomy, purpose and relationships at a medical student level. Use the first step to introduce the approach. Put short citation markers at the end of each paragraph, list the full linked citations explicitly inside that step’s Details disclosure, and keep the complete bibliography in Papers. Use an atlas chapter when available. Identify model-only reversals and reconstruction choices.
 
 Bundle a verified source image for every step and variant in **2D Figures**. For a paper-specific case, use figures from that paper. When there is no direct illustration, reuse the closest related figure and label it as context. Record the figure and panel, citation, publisher link, source page and license. Check redistribution rights for the intended audience. Render the images as soon as readers open the tab.
 
 Add a high-contrast, borderless **Back** link to the left of the title for every simulation reached from a library. Return to the library page that launched the guide. Use the Procedure Library or Operative Cases index as the direct-entry fallback for the respective guide.
 
 Draw black skin ink in the skin mesh’s rest coordinates at the marking step. Keep it visible on the exterior skin through later steps, moving with both cut edges and any reflected flaps. Keep other teaching overlays distinct. Clear and hide the anatomy labels and their leader SVG while 2D Figures is active.
+
+## Video sources and finer 2D steps
+
+For procedure guides, look for relevant operative videos alongside the primary papers, including videos linked from article pages. A user-provided article or video URL is sufficient to begin: open it, check the linked video and any accessible full text, and use available authorized access. Do not assume that an article link grants access to its video or permission to redistribute frames. If a sign-in, paywall, unavailable file, technical restriction, or terms prevents access, explain the precise barrier and ask for a suitable accessible link or file; never bypass a restriction.
+
+When a video is available and reuse is permitted for the intended audience, watch the footage, identify meaningful procedural actions, and capture clear frames at verified timestamps. Map each frame to the corresponding 2D Figures step and add multiple fine-grained frames when they clarify distinct actions. Label each with the observed action, timestamp, source title, authors, link and appropriate credit and license. State when the video depicts a particular case, laterality, variant or device that differs from the selected guide. Do not describe unseen steps, fabricate screenshots, or imply that an unrelated image depicts the selected action. Use the article transcript to aid navigation, not as proof of what an unseen frame shows.
+
+If no directly matching reusable frame is available, retain a clearly labeled related figure or source link and record the missing coverage. Provide links to the specific video timestamps where possible. Check permissions and third-party figure terms before bundling or publishing; access alone does not establish reuse rights. Preserve attribution and license notices and report any unresolved rights or access issues. Exclude operative case pages from bulk video-frame changes when the user requests that exclusion.
