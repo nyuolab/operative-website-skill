@@ -75,7 +75,7 @@ python3 tools/anatomy.py pack /tmp/pterional-meshes.json
 
 ## Reading the guide
 
-Open **Step notes & sources** for anatomical context and linked citations. The first step also has **Approach background**. Open **2D Figures** to see the bundled paper images. When a paper does not show the exact action, the guide labels the closest available image as a related figure. Black lines at skin preparation show the planned ink marking.
+Open **Details** for a paragraph on each step’s anatomical context. The first step introduces the approach. Short citation markers link to the sources. Open **2D Figures** to see the bundled paper images. When a paper does not show the exact action, the guide labels the closest available image as a related figure. The black marking appears on the skin at preparation and follows the cut edges and reflected flap through closure.
 
 ## Camera and patient positioning
 

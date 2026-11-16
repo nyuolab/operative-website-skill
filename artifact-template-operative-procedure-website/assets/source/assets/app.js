@@ -306,8 +306,11 @@
     } }
     $$('[role=tab]').forEach(b => b.onclick = () => setTab(b.id.slice(4)));
     function setMode(next) { animationToken++; mode = next; $('#mode3d').setAttribute('aria-pressed', mode === '3d'); $('#mode2d').setAttribute('aria-pressed', mode === '2d'); for (const s of ['#canvas', '#viewinfo', '.floating', '#gesturehint', '.viewtools', '#mobileModelDock', '#stepLabels', '#labelLines', '#orientGizmo'])
-        $(s).hidden = mode !== '3d'; $('#figurepanel').hidden = mode === '3d'; $('#popup').hidden = true; if (mode === '2d')
+        $(s).toggleAttribute('hidden', mode !== '3d'); $('#figurepanel').hidden = mode === '3d'; $('#popup').hidden = true; if (mode === '2d') {
+        $('#labelLines').replaceChildren();
+        $('#stepLabels').replaceChildren();
         showSourceFigures();
+    }
     else {
         playStepAnimation();
         render();
@@ -399,7 +402,6 @@
     } $('#paperEmpty').hidden = count > 0; $('#paperCount').textContent = papers.length; }
     $('#paperSearch').oninput = renderPapers;
     const studyGuide = {
-  "overview": "The frontotemporal window exposes the Sylvian fissure and provides a low route to the anterior and middle skull base. Study the opening in three layers: surface landmarks and facial nerve protection, a bony corridor along the sphenoid wing, then the intradural route chosen for the target.",
   "overviewCitations": [
     "anatomy",
     "general"
@@ -413,7 +415,7 @@
       "citations": [
         "anatomy"
       ],
-      "detail": "Find the junction of the frontal, parietal, temporal and greater sphenoid wing bones. Compare the external suture junction with the position of the Sylvian fissure beneath it.",
+      "detail": "The pterional approach is a frontotemporal route to the lateral and basal surfaces of the brain. Its landmark, the pterion, is the junction of the frontal, parietal, temporal and sphenoid bones. Rotate the skull to see how the pterion lines up with the Sylvian fissure, the cleft separating the frontal and temporal lobes. A window here can provide a line of sight to the middle cerebral artery or the optic and carotid region, depending on the direction of the approach.",
       "figures": [
         {
           "paper": "anatomy",
@@ -440,7 +442,7 @@
         "anatomy",
         "corridors"
       ],
-      "detail": "Head rotation sets the relationship of the frontal and temporal lobes to gravity and the sphenoid wing. The reference dissection gives one example of positioning; the target determines the angle.",
+      "detail": "A rigid head holder maintains the relationship between the skull and the operative field. Turning the head away from the approach side places the frontotemporal region uppermost. Extension changes the slope of the frontal skull base and how gravity acts on the frontal lobe. Compare the posed head with the sphenoid wing in the model to see how this changes the line of sight.",
       "figures": [
         {
           "paper": "corridors",
@@ -467,7 +469,7 @@
         "anatomy",
         "corridors"
       ],
-      "detail": "Follow the proposed curve from the preauricular end toward the midline behind the hairline. The black guide shows surface ink; identify the superficial temporal artery and the frontotemporal facial nerve territory before cutting.",
+      "detail": "The curving frontotemporal mark starts near the zygomatic arch just ahead of the ear and arcs behind the hairline toward the midline. The planned curve leaves enough scalp to reflect forward over the forehead. The superficial temporal artery runs in the superficial tissues in this region. In the model, the black ink follows the skin when the incision separates and the flap moves.",
       "figures": [
         {
           "paper": "corridors",
@@ -485,7 +487,7 @@
         "general",
         "corridors"
       ],
-      "detail": "The draped opening preserves access to the hairline and zygomatic landmarks used to orient the curve.",
+      "detail": "Draping isolates the prepared skin around the planned exposure. The opening in the drapes leaves enough room for the curved incision and for the scalp flap to turn forward without obscuring the zygomatic arch, a useful landmark near the base of the exposure. The surface mark remains visible after the drapes are placed.",
       "figures": [
         {
           "paper": "corridors",
@@ -503,7 +505,7 @@
         "anatomy",
         "corridors"
       ],
-      "detail": "Follow the marked line while identifying the superficial temporal artery in the scalp layers. The depth of the incision and subsequent plane of flap elevation are separate actions.",
+      "detail": "The first opening passes through the skin and subcutaneous tissue to the galea, the tough fibrous sheet beneath the scalp fat. The superficial temporal vessels run in this superficial compartment and can bleed as the skin opens. Watch the ink split between the two skin edges as the incision develops. The deeper plane used to lift the flap becomes visible at the next step.",
       "figures": [
         {
           "paper": "corridors",
@@ -521,7 +523,7 @@
         "anatomy",
         "corridors"
       ],
-      "detail": "The loose plane beneath the galea allows the scalp to mobilize anteriorly. Compare the superficial temporal artery branches in the flap with the temporalis fascia below.",
+      "detail": "The galea can slide over the underlying pericranium because loose connective tissue lies between the two layers. Reflecting the scalp and galea together exposes the covering of the bone superiorly and temporal fascia inferiorly. The reflected flap carries superficial vessels. In the myocutaneous variant, watch how the plan keeps the scalp and temporalis connected.",
       "figures": [
         {
           "paper": "corridors",
@@ -549,7 +551,7 @@
         "subfascial",
         "muscles"
       ],
-      "detail": "The temporal fat pads and fascial leaves locate the plane near the frontotemporal facial nerve branches. Follow the plane selected in the model and compare the relationship of the tissue layers.",
+      "detail": "The temporal fascia is a tough covering over temporalis, the chewing muscle that fills the temporal fossa. Near the zygomatic arch its layers border small fat pads, which help orient the dissection. The frontotemporal branches of the facial nerve run superficial to the deep fascia in this region and supply muscles that elevate the brow. Compare the reflected fascia with the muscle below it.",
       "figures": [
         {
           "paper": "extra",
@@ -576,7 +578,7 @@
         "anatomy",
         "corridors"
       ],
-      "detail": "The muscle-splitting variant takes a different route through temporalis. Use the source for the fascia and fat-pad anatomy and compare those landmarks on the selected model.",
+      "detail": "The myocutaneous technique lifts a flap that includes scalp and temporalis. Moving these tissues together avoids developing the same narrow fascial plane used in the subfascial technique. The muscle still has to clear the planned frontotemporal bone window. Compare which tissue moves and how much of the temporal fossa opens in the two variants.",
       "figures": [
         {
           "paper": "anatomy",
@@ -594,7 +596,7 @@
         "anatomy",
         "corridors"
       ],
-      "detail": "Reflecting soft tissue frees the frontotemporal surface for the craniotomy. Check the exposure at the zygomatic root and the direction in which the flap is secured.",
+      "detail": "Reflecting the flap clears the skull surface and creates room for the craniotomy. The zygomatic root is the posterior attachment of the arch to the temporal bone. It helps orient the low temporal portion of the opening. Follow the reflected soft-tissue edge to see whether it still overlaps the intended bone window.",
       "figures": [
         {
           "paper": "corridors",
@@ -612,7 +614,7 @@
         "anatomy",
         "corridors"
       ],
-      "detail": "Elevate the covering tissues enough to identify the margins of the frontotemporal bone window. The exposed greater wing separates the anterior and middle cranial fossae.",
+      "detail": "The pericranium is the periosteum on the outside of the cranial vault. Lifting it and mobilizing the temporalis expose the outer table of the frontal and temporal bones. The superior temporal line is a curved ridge that orients the muscle’s attachment. The sphenoid wing lies deeper toward the floor of the exposure.",
       "figures": [
         {
           "paper": "corridors",
@@ -630,7 +632,7 @@
         "anatomy",
         "corridors"
       ],
-      "detail": "Read each burr-hole position against the temporal line, zygomatic root and intended bone flap. The paper shows its own three-hole example.",
+      "detail": "A burr hole passes through the outer table, the cancellous diploë and the inner table of the skull to expose dura. The openings provide access for separating the dura and for starting the cuts that outline the bone flap. Use the zygomatic root and temporal line to relate each opening to the final shape of the flap. The cited dissection illustrates one possible layout.",
       "figures": [
         {
           "paper": "corridors",
@@ -648,7 +650,7 @@
         "general",
         "anatomy"
       ],
-      "detail": "Inspect the first exposed diploic and dural surfaces before connecting the openings. This is a check of visualization and bleeding at the bony margins.",
+      "detail": "The diploë is the vascular cancellous layer between the compact tables of the calvarium. Blood from its channels can collect around a burr hole and obscure the inner table. Once the rim is visible, the surgeon can tell where bone ends and dura begins. In the model, compare the exposed edge with the broader dural surface revealed after the flap is lifted.",
       "figures": [
         {
           "paper": "anatomy",
@@ -666,7 +668,7 @@
         "general",
         "corridors"
       ],
-      "detail": "The tissue plane lies between the inner table and dura. Controlled separation lets the flap lift while the dura remains visible beneath the cut.",
+      "detail": "The dura is the tough outer meningeal layer and normally lies against the inner skull. Freeing it along the flap margin creates an epidural plane so it can remain in place as the bone is cut and lifted. A blunt dissector works in this interface. Observe that the movement is between bone and dura, outside the tissue that covers the brain.",
       "figures": [
         {
           "paper": "corridors",
@@ -684,7 +686,7 @@
         "anatomy",
         "corridors"
       ],
-      "detail": "Identify the frontal and temporal dural surfaces as the bone flap is lifted. The residual sphenoid wing sets how low the operative trajectory can pass.",
+      "detail": "The craniotomy is a removable plate of frontotemporal bone. Lifting it exposes frontal dura above and temporal dura below. The residual sphenoid wing projects between these two surfaces. Its height determines how close the operative line of sight can run to the skull base.",
       "figures": [
         {
           "paper": "corridors",
@@ -702,7 +704,7 @@
         "general",
         "anatomy"
       ],
-      "detail": "Pause at the exposed dura to inspect the flap edge and the epidural surface before another opening changes the field.",
+      "detail": "The epidural space is the potential space between the inner skull and the dura. Small vessels along the bone edge and on the outer dura can bleed once a flap is raised. Inspecting the exposed surface helps distinguish these sources before the dura is opened. The brain is still covered by dura at this stage.",
       "figures": [
         {
           "paper": "anatomy",
@@ -720,7 +722,7 @@
         "anatomy",
         "corridors"
       ],
-      "detail": "Flattening the prominence of the greater sphenoid wing lowers the working trajectory between the frontal and temporal dura.",
+      "detail": "The greater sphenoid wing contributes to the boundary between the anterior and middle cranial fossae. In the pterional view it forms a bony ridge between the frontal and temporal dural surfaces. Reducing this ridge makes the approach flatter and improves the view along the base of the frontal lobe. Compare the trajectory before and after the ridge is reduced.",
       "figures": [
         {
           "paper": "corridors",
@@ -738,7 +740,7 @@
         "corridors",
         "extra"
       ],
-      "detail": "Basal extension depends on the target. Identify the orbital roof and superior orbital fissure before comparing the additional bony exposure.",
+      "detail": "Some targets require looking farther beneath the frontal lobe or closer to the optic canal. The orbital roof, sphenoid wing and superior orbital fissure define the anatomy of this extension. The fissure is a passage between the orbit and cranial cavity that carries several cranial nerves. The required extra bone exposure depends on the target.",
       "figures": [
         {
           "paper": "corridors",
@@ -755,7 +757,7 @@
       "citations": [
         "general"
       ],
-      "detail": "Dural sutures hold the dural edge against the opening. Compare this edge control with the later stitches used for closure.",
+      "detail": "Dural tack-up sutures hold the dura near the skull margin so it does not fall away from the inner table. This limits the potential epidural space and keeps the edge of the opening organized. In the model, compare these sutures along the bone margin with the sutures that later bring the dural cut edges together.",
       "figures": [
         {
           "paper": "corridors",
@@ -774,7 +776,7 @@
         "general",
         "no-split"
       ],
-      "detail": "The dural opening determines the first intradural line of sight. Compare the reflected edge with the sphenoid wing and selected approach before following the arachnoid.",
+      "detail": "Opening the dura exposes the arachnoid and the contours of the frontal and temporal lobes beneath it. The direction of the dural flap affects which part of the brain surface becomes visible first. A wider opening exposes the Sylvian region, while the low subfrontal option emphasizes the basal route. Compare the opening with the sphenoid ridge and the intended target.",
       "figures": [
         {
           "paper": "anatomy",
@@ -792,7 +794,7 @@
         "sylvian",
         "focused-sylvian"
       ],
-      "detail": "Identify the frontal and temporal opercula and the arachnoid boundary between them. Compare the location of the superficial veins with the deeper MCA branches as the corridor opens.",
+      "detail": "The Sylvian fissure separates the frontal and temporal opercula, the cortical lips overlying the insula. Arachnoid spans the cleft and superficial veins can cross the working path. The middle cerebral artery runs deeper within the fissure. Distinguish these structures in the model to see how opening the arachnoid creates a path between lobes.",
       "figures": [
         {
           "paper": "focused-sylvian",
@@ -819,7 +821,7 @@
         "anatomy",
         "no-split"
       ],
-      "detail": "Follow the basal subfrontal line of sight and identify cisternal arachnoid. This version emphasizes the basal route.",
+      "detail": "A cistern is a widened space beneath the arachnoid that contains cerebrospinal fluid and can carry nerves or vessels. In the low subfrontal approach, the line of sight passes along the frontal skull base toward the basal cisterns. The optic nerve and internal carotid artery help orient the deeper field. Compare this trajectory with the one through the lateral fissure.",
       "figures": [
         {
           "paper": "anatomy",
@@ -837,7 +839,7 @@
       "citations": [
         "anatomy"
       ],
-      "detail": "Use the optic canal, optic nerve and nearby carotid landmarks to orient at the intact anterior clinoid. Retention is the selected exposure option in this sequence.",
+      "detail": "The anterior clinoid is a bony projection of the lesser sphenoid wing beside the optic canal. The optic nerve passes through that canal, and the internal carotid artery lies close to the clinoid’s medial and inferior aspects. In this variant the bone remains as a landmark at the edge of the working corridor. Identify the targets that are already visible with it in place.",
       "figures": [
         {
           "paper": "anatomy",
@@ -855,7 +857,7 @@
         "anatomy",
         "sylvian"
       ],
-      "detail": "Use the position of the optic apparatus, carotid artery and Sylvian vessels to relate the exposed field to the selected target.",
+      "detail": "The optic nerve runs from the optic canal toward the chiasm, where some retinal fibers cross. The internal carotid artery lies nearby and gives rise to the middle cerebral artery, which enters the Sylvian fissure. These landmarks distinguish the basal and lateral lines of sight. Rotate between them to relate the selected exposure to the target.",
       "figures": [
         {
           "paper": "focused-sylvian",
@@ -872,7 +874,7 @@
       "citations": [
         "general"
       ],
-      "detail": "Dural reapproximation restores the innermost layer of the closure. Inspect the dural edges before covering them with bone.",
+      "detail": "The dura is the tough protective layer immediately beneath the bone. Bringing its cut edges back together restores the covering over the arachnoid and brain. The closure is checked before the bone flap obscures the repair. In the model, follow the reflected edge back to the rim of the original opening.",
       "figures": [
         {
           "paper": "anatomy",
@@ -890,7 +892,7 @@
       "citations": [
         "general"
       ],
-      "detail": "Check the relationship of the replaced flap to the surrounding calvarium, particularly along the anterior and temporal margins.",
+      "detail": "Replacing the bone flap restores the rigid contour of the skull after the dura has been covered. The thick calvarial surfaces meet along the frontotemporal opening, with a smaller gap where bone was removed at the base. Observe how the flap aligns with the surrounding outer table as it returns to its original position.",
       "figures": [
         {
           "paper": "corridors",
@@ -909,7 +911,7 @@
         "general",
         "anatomy"
       ],
-      "detail": "Return temporalis and its fascial covering toward their original attachment plane before closing the overlying scalp.",
+      "detail": "Temporalis elevates the mandible during chewing and normally covers the temporal fossa. Returning it toward its attachment restores a layer of soft tissue over the edge of the bone flap. The fascial covering also returns to the temporal surface. Compare the restored contour with the exposed bone before closure.",
       "figures": [
         {
           "paper": "extra",
@@ -927,7 +929,7 @@
       "citations": [
         "general"
       ],
-      "detail": "Review the layer where a subgaleal drain would lie when used. Drain placement depends on the circumstances of the closure.",
+      "detail": "The subgaleal plane lies beneath the galea and above the pericranium or bone. When used, a drain can collect blood or fluid in this superficial space after closure. It remains outside the epidural and intradural compartments. Use the model to distinguish its depth from the dural repair and the scalp surface.",
       "figures": [
         {
           "paper": "corridors",
@@ -945,7 +947,7 @@
       "citations": [
         "general"
       ],
-      "detail": "The galeal layer is reapproximated before the skin. Follow its continuity along the reflected incision.",
+      "detail": "The galea is a fibrous layer that helps carry tension across the scalp. Approximating it brings the deeper wound edges together before the skin is closed. Watch its edges approach along the same curve as the surface incision. The layer lies above the pericranium and beneath the skin and subcutaneous fat.",
       "figures": [
         {
           "paper": "corridors",
@@ -963,7 +965,7 @@
       "citations": [
         "general"
       ],
-      "detail": "Compare skin edge apposition with the earlier incision path and the deeper galeal closure.",
+      "detail": "The outermost step brings the two skin edges back into alignment after the deeper layers have been restored. The original ink helps locate the surface incision, even after the flap has returned. Compare skin edge alignment along the curve and at its ends. The skin closure is superficial to the galeal repair.",
       "figures": [
         {
           "paper": "corridors",
@@ -982,7 +984,7 @@
         "extra",
         "corridors"
       ],
-      "detail": "Distinguish the anterior clinoid from the optic canal roof and optic strut. The extradural view shows the limits of bone removal relative to the optic apparatus and carotid artery.",
+      "detail": "The anterior clinoid is part of the lesser sphenoid wing and helps form the lateral boundary of the optic canal. Its bony connections include the optic strut, which separates the canal from the superior orbital fissure. In the extradural variant, these landmarks are exposed while the dura still covers the brain. Compare their relationship to the optic nerve and internal carotid artery.",
       "figures": [
         {
           "paper": "extra",
@@ -999,7 +1001,7 @@
       "citations": [
         "intra"
       ],
-      "detail": "In the intradural variant, identify the optic nerve and carotid relationship within the opened dural field before comparing the bony extension. The cited paper describes a hybrid method and discusses the exposure trade-offs.",
+      "detail": "In the intradural variant, the surgeon can see the optic nerve and nearby internal carotid artery after the dura opens. The anterior clinoid forms a bony boundary lateral to the optic canal and may limit this line of sight. Removing it changes exposure near the optic nerve and carotid artery. The cited review discusses intradural and combined approaches.",
       "figures": [
         {
           "paper": "anatomy",
@@ -1018,7 +1020,7 @@
         "extra",
         "corridors"
       ],
-      "detail": "Distinguish the anterior clinoid from the optic canal roof and optic strut. The extradural view shows the limits of bone removal relative to the optic apparatus and carotid artery.",
+      "detail": "The anterior clinoid is part of the lesser sphenoid wing and helps form the lateral boundary of the optic canal. Its bony connections include the optic strut, which separates the canal from the superior orbital fissure. In the extradural variant, these landmarks are exposed while the dura still covers the brain. Compare their relationship to the optic nerve and internal carotid artery.",
       "figures": [
         {
           "paper": "extra",
@@ -1035,7 +1037,7 @@
       "citations": [
         "intra"
       ],
-      "detail": "In the intradural variant, identify the optic nerve and carotid relationship within the opened dural field before comparing the bony extension. The cited paper describes a hybrid method and discusses the exposure trade-offs.",
+      "detail": "In the intradural variant, the surgeon can see the optic nerve and nearby internal carotid artery after the dura opens. The anterior clinoid forms a bony boundary lateral to the optic canal and may limit this line of sight. Removing it changes exposure near the optic nerve and carotid artery. The cited review discusses intradural and combined approaches.",
       "figures": [
         {
           "paper": "anatomy",
@@ -1054,7 +1056,7 @@
         "extra",
         "corridors"
       ],
-      "detail": "Distinguish the anterior clinoid from the optic canal roof and optic strut. The extradural view shows the limits of bone removal relative to the optic apparatus and carotid artery.",
+      "detail": "The anterior clinoid is part of the lesser sphenoid wing and helps form the lateral boundary of the optic canal. Its bony connections include the optic strut, which separates the canal from the superior orbital fissure. In the extradural variant, these landmarks are exposed while the dura still covers the brain. Compare their relationship to the optic nerve and internal carotid artery.",
       "figures": [
         {
           "paper": "extra",
@@ -1071,7 +1073,7 @@
       "citations": [
         "intra"
       ],
-      "detail": "In the intradural variant, identify the optic nerve and carotid relationship within the opened dural field before comparing the bony extension. The cited paper describes a hybrid method and discusses the exposure trade-offs.",
+      "detail": "In the intradural variant, the surgeon can see the optic nerve and nearby internal carotid artery after the dura opens. The anterior clinoid forms a bony boundary lateral to the optic canal and may limit this line of sight. Removing it changes exposure near the optic nerve and carotid artery. The cited review discusses intradural and combined approaches.",
       "figures": [
         {
           "paper": "anatomy",
@@ -1095,20 +1097,27 @@
         const variation = key === 'muscle' ? config.muscle : key === 'clinoid' ? config.clinoid : null;
         return studyGuide.steps[key + ':' + variation] || studyGuide.steps[key];
     }
-    function stepCitations(ids) {
-        const sources = [...new Set(ids)].map(paperById).filter(Boolean);
-        return sources.length ? `<ul class="study-citations">${sources.map(p =>
-            `<li>${sourceLink(p.url, p.citation || p.title)}</li>`).join('')}</ul>` : '';
+    function studyCitations(ids) {
+        return [...new Set(ids)].map(paperById).filter(Boolean);
     }
+
+    function stepCitations(ids) {
+        const sources = studyCitations(ids);
+        return sources.length ? `<ul class="study-citations">${sources.map(paper =>
+            `<li>${sourceLink(paper.url, paper.citation || paper.title)}</li>`).join('')}</ul>` : '';
+    }
+
     function studyNotes(step, index) {
         const entry = studyEntry(step);
-        const notes = entry ? `<details class="study-notes"><summary>Step notes &amp; sources</summary>
-            <p>${escape(entry.detail)}</p>${stepCitations(entry.citations)}</details>` : '';
-        if (index !== 0) return notes;
-        const reading = studyGuide.reading;
-        return notes + `<details class="study-notes"><summary>Approach background</summary>
-            <p>${escape(studyGuide.overview)}</p>${stepCitations(studyGuide.overviewCitations)}
-            ${reading ? sourceLink(reading.url, reading.label) : ''}</details>`;
+        if (!entry) return '';
+        const reading = index === 0 ? studyGuide.reading : null;
+        const citations = studyCitations(index === 0
+            ? [...entry.citations, ...studyGuide.overviewCitations] : entry.citations);
+        const links = citations.map((paper, i) =>
+            `<a href="${escape(paper.url)}" title="${escape(paper.citation || paper.title)}" aria-label="${escape(paper.citation || paper.title)}" target="_blank" rel="noopener noreferrer">[${i + 1}]</a>`);
+        if (reading) links.push(sourceLink(reading.url, 'Atlas'));
+        return `<details class="study-notes"><summary>Details</summary>
+            <p>${escape(entry.detail)}${links.length ? ` <span class="study-reference-links">${links.join(' ')}</span>` : ''}</p></details>`;
     }
 
     function stepFigures(step) {
@@ -1133,7 +1142,7 @@
                     <img src="${escape(figure.image)}" alt="${escape(figure.takeaway)}" loading="lazy">
                 </a>
                 <figcaption><strong>${escape(label)}</strong><p>${escape(figure.takeaway)}</p>
-                    <p>${escape(credit)}${license}</p>${url ? sourceLink(url, 'Open published source') : ''}
+                    <p class="figure-credit">${escape(credit)}${license}</p>${url ? sourceLink(url, 'Open published source') : ''}
                 </figcaption>
             </figure>`;
         }).join('');
@@ -1295,7 +1304,7 @@
     function baseVisible(m, wholeStep = false) { if (!m || m.hidden || hiddenWhileSeparated(m))
         return false; const side = meshSide(m); if (contextSide !== 'both' && side !== 'both' && side !== contextSide && !wholeScalp(m))
         return false; if (m.marker)
-        return procedure && side === operativeSide() && (m.markerStages.includes(steps[stage].id) || (steps[stage].id === 'sterile' && baseId(m).replace(/-l$/, '') === 'MARK-incision')) && (!m.markerFissure || m.markerFissure === config.fissure); if (m.instrument) {
+        return procedure && side === operativeSide() && (baseId(m).replace(/-l$/, '') !== 'MARK-incision' && m.markerStages.includes(steps[stage].id)) && (!m.markerFissure || m.markerFissure === config.fissure); if (m.instrument) {
         if (!procedure || (!wholeStep && beforeCurrent) || side !== operativeSide() || !instrumentsOn)
             return false;
         const match = m.instrumentStage === steps[stage].visualAction && (m.instrumentKind !== 'dura-wide' || config.fissure === 'yes') && (m.instrumentKind !== 'dura-low' || config.fissure === 'no');
@@ -2087,6 +2096,7 @@
     function shader(type, text) { const s = gl.createShader(type); gl.shaderSource(s, text); gl.compileShader(s); if (!gl.getShaderParameter(s, gl.COMPILE_STATUS))
         throw Error(gl.getShaderInfoLog(s)); return s; }
     function initGL() {
+        skinInkMasks.clear();
         gl = canvas.getContext('webgl', { antialias: true, alpha: false, preserveDrawingBuffer: true });
         if (!gl)
             throw Error('WebGL is unavailable');
@@ -2133,6 +2143,7 @@ precision highp float;
 precision mediump float;
 #endif
 #define FISSURE_N ${fissureN}
+uniform sampler2D uInkMask;uniform vec4 uInkBounds;uniform float uInkProgress;
 uniform mediump float uLine;uniform vec4 uColor;uniform float uSelected,uPick,uRegion,uCut,uChange,uWindowAction,uBurrs,uIsMarker,uMarkKind,uMarkAxis,uMarkReveal,uMaterial,uSurgical,uQuality;uniform vec3 uMarkCenter;uniform vec2 uMarkRange,uViewport;uniform mediump float uAction;uniform vec3 uFissure[FISSURE_N];uniform vec3 uCamPos;uniform float uFisVeil;uniform mediump float uSplitKind;uniform float uSplitPass;uniform vec4 uGroove;uniform vec3 uInner;varying mediump vec3 vNormal;varying vec3 vOriginal;varying vec3 vEye;varying mediump float vAO;varying mediump vec3 vObjN;varying float vSplit;varying float vIncT;
 #ifdef GL_FRAGMENT_PRECISION_HIGH
 float hsh(vec3 p){p=fract(p*.1031);p+=dot(p,p.zyx+31.32);return fract((p.x+p.y)*p.z);}
@@ -2214,12 +2225,24 @@ if(uChange==7.&&vOriginal.x< -1.9){float r=min(distance(vOriginal.yz,vec2(-.7,2.
 if(uChange==6.){region=1.-smoothstep(1.,1.25,distance(vOriginal,vec3(-2.1,-.5,1.0)));hs=.5;if(uCut==8.){region=1.;hs=.2;od=abs(fisE);}}
 float highlight=region*(hs*(.22+.78*rim)+.75*(1.-smoothstep(.012,.04,od)));
 c=mix(c,vec3(1.,.65,.17)*(.6+.4*light),clamp(highlight,0.,.9));if(arach)alpha=max(alpha,.8*highlight);
+if(uInkProgress>0.){
+  vec2 uv=(vOriginal.yz-uInkBounds.xy)/uInkBounds.zw;
+  vec4 ink=texture2D(uInkMask,uv);
+  float outer=smoothstep(.18,.55,dot(vObjN, normalize(vOriginal - vec3(0., -.4, -.4))));
+  c=mix(c,vec3(.052,.041,.038),ink.a*outer*step(ink.r,uInkProgress));
+}
 if(uSelected>.5)c=mix(c,vec3(.66,1.,.62),.50);if(uIsMarker>.5)c=mix(c,uColor.rgb,.8);gl_FragColor=vec4(c,alpha);}`));
         gl.linkProgram(program);
         if (!gl.getProgramParameter(program, gl.LINK_STATUS))
             throw Error(gl.getProgramInfoLog(program));
         gl.useProgram(program);
-        ['View', 'Gravity', 'Distance', 'Aspect', 'Scale', 'Pan', 'Color', 'Selected', 'Pick', 'Region', 'Target', 'Cut', 'Motion', 'Action', 'Offset', 'Change', 'WindowAction', 'FlapAngle', 'Side', 'Burrs', 'IsMarker', 'Line', 'LinePx', 'LineNudge', 'MarkKind', 'MarkAxis', 'MarkReveal', 'MarkCenter', 'MarkRange', 'Material', 'Surgical', 'Quality', 'Viewport', 'Fissure', 'FlapAxis', 'FlapPivot', 'CamPos', 'FisVeil', 'CurlOn', 'CurlIA', 'CurlPivot', 'CurlAxis', 'CurlAway', 'CurlLift', 'CurlP', 'CurlRow', 'DrapeW', 'DrapeP', 'Drape', 'PartOn', 'Part', 'Inc', 'IncReveal', 'SplitKind', 'SplitPlane', 'SplitInc', 'SplitPass', 'Groove', 'Inner'].forEach(n => uniforms[n] = gl.getUniformLocation(program, 'u' + n));
+        ['InkMask', 'InkBounds', 'InkProgress', 'View', 'Gravity', 'Distance', 'Aspect', 'Scale', 'Pan', 'Color', 'Selected', 'Pick', 'Region', 'Target', 'Cut', 'Motion', 'Action', 'Offset', 'Change', 'WindowAction', 'FlapAngle', 'Side', 'Burrs', 'IsMarker', 'Line', 'LinePx', 'LineNudge', 'MarkKind', 'MarkAxis', 'MarkReveal', 'MarkCenter', 'MarkRange', 'Material', 'Surgical', 'Quality', 'Viewport', 'Fissure', 'FlapAxis', 'FlapPivot', 'CamPos', 'FisVeil', 'CurlOn', 'CurlIA', 'CurlPivot', 'CurlAxis', 'CurlAway', 'CurlLift', 'CurlP', 'CurlRow', 'DrapeW', 'DrapeP', 'Drape', 'PartOn', 'Part', 'Inc', 'IncReveal', 'SplitKind', 'SplitPlane', 'SplitInc', 'SplitPass', 'Groove', 'Inner'].forEach(n => uniforms[n] = gl.getUniformLocation(program, 'u' + n));
+        gl.uniform1i(uniforms.InkMask, 1);
+        gl.activeTexture(gl.TEXTURE1);
+        gl.bindTexture(gl.TEXTURE_2D, gl.createTexture());
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array(4));
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+        gl.activeTexture(gl.TEXTURE0);
         let vertexCount = 0;
         meshes.forEach((m, i) => { m.index = i; m.hidden = false; m.first = vertexCount; vertexCount += m.count; m.rgb = m.color.match(/\w\w/g).map(x => parseInt(x, 16) / 255); m.innerRgb = m.innerColor ? hexRgb(m.innerColor) : null; m.surgicalTint = /^ILL-sulcal-backing/.test(m.id) ? surgicalRgb.brain.map(x => x * .62) : surgicalLayerTints[baseId(m)] ? hexRgb(surgicalLayerTints[baseId(m)]) : null; });
         buffer = gl.createBuffer();
@@ -2299,6 +2322,71 @@ if(uSelected>.5)c=mix(c,vec3(.66,1.,.62),.50);if(uIsMarker>.5)c=mix(c,uColor.rgb
         const vp = gl.getParameter(gl.MAX_VIEWPORT_DIMS);
         drawLimitCache = Math.max(256, Math.min(gl.getParameter(gl.MAX_RENDERBUFFER_SIZE) || 4096, gl.getParameter(gl.MAX_TEXTURE_SIZE) || 4096, vp ? Math.min(vp[0], vp[1]) : 4096));
     } return drawLimitCache; }
+    function skinInkPath() {
+        return incisionFor(operativeSide())?.pts.map(([, y, z]) => [y, z]);
+    }
+
+    // Draw ink in the skin's rest coordinates. The same pixels then follow the
+    // parted edges, reflected flap and closure through the existing mesh transforms.
+    const skinInkMasks = new Map();
+    function skinInkTexture(points) {
+        const size = 512, radius = .065, padding = .12;
+        const left = Math.min(...points.map(([x]) => x)) - padding;
+        const bottom = Math.min(...points.map(([, y]) => y)) - padding;
+        const width = Math.max(...points.map(([x]) => x)) + padding - left;
+        const height = Math.max(...points.map(([, y]) => y)) + padding - bottom;
+        const pixels = new Uint8Array(size * size * 4);
+        const u = x => (x - left) / width * size;
+        const v = y => (y - bottom) / height * size;
+        const clampPixel = n => Math.min(size - 1, Math.max(0, Math.floor(n)));
+        for (let i = 1; i < points.length; i++) {
+            const [ax, ay] = points[i - 1], [bx, by] = points[i];
+            const dx = bx - ax, dy = by - ay, lengthSquared = dx * dx + dy * dy;
+            for (let py = clampPixel(v(Math.min(ay, by) - radius)); py <= clampPixel(v(Math.max(ay, by) + radius)); py++) {
+                for (let px = clampPixel(u(Math.min(ax, bx) - radius)); px <= clampPixel(u(Math.max(ax, bx) + radius)); px++) {
+                    const x = left + (px + .5) * width / size - ax;
+                    const y = bottom + (py + .5) * height / size - ay;
+                    const t = Math.max(0, Math.min(1, (x * dx + y * dy) / (lengthSquared || 1)));
+                    const alpha = Math.round(255 * Math.max(0, Math.min(1, (radius - Math.hypot(x - dx * t, y - dy * t)) / .02)));
+                    const index = 4 * (py * size + px);
+                    if (alpha <= pixels[index + 3]) continue;
+                    pixels[index] = Math.round(255 * (i - 1 + t) / (points.length - 1));
+                    pixels[index + 3] = alpha;
+                }
+            }
+        }
+        const texture = gl.createTexture();
+        gl.activeTexture(gl.TEXTURE1);
+        gl.bindTexture(gl.TEXTURE_2D, texture);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, size, size, 0, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+        gl.activeTexture(gl.TEXTURE0);
+        return { texture, bounds: [left, bottom, width, height] };
+    }
+
+    function prepareSkinInk(picking) {
+        if (picking || !procedure) return 0;
+        const marking = steps.findIndex(step => step.id === 'prepare');
+        if (marking < 0 || stage < marking || stage === marking && beforeCurrent) return 0;
+        const progress = stage === marking ? opening : 1;
+        if (progress <= 0) return 0;
+        const key = operativeSide();
+        if (!skinInkMasks.has(key)) {
+            const points = skinInkPath();
+            if (!points?.length) return 0;
+            skinInkMasks.set(key, skinInkTexture(points));
+        }
+        const { texture, bounds } = skinInkMasks.get(key);
+        gl.activeTexture(gl.TEXTURE1);
+        gl.bindTexture(gl.TEXTURE_2D, texture);
+        gl.activeTexture(gl.TEXTURE0);
+        gl.uniform4fv(uniforms.InkBounds, bounds);
+        return progress;
+    }
+
     function draw(picking = false) {
         if (!available)
             return;
@@ -2342,13 +2430,15 @@ if(uSelected>.5)c=mix(c,vec3(.66,1.,.62),.50);if(uIsMarker>.5)c=mix(c,uColor.rgb
         gl.disable(gl.BLEND);
         gl.depthFunc(gl.LEQUAL);
         gl.depthMask(true);
+        gl.uniform1f(uniforms.InkProgress, 0);
         drawProps(picking); // schematic head holder and table (room views only); restores the anatomy buffer
+        const inkProgress = prepareSkinInk(picking);
         for (const m of list) {
             ensureGeometry(m);
             const flat = m.marker || m.instrument || !(m.group in materialIds), see = !picking && opacity(m) < 1;
             // The illustrative sulcal backing gets a darker, recessed cortex tone in the Surgical palette too.
             let rgb = palette === 'surgical' && !flat ? (m.surgicalTint || surgicalRgb[m.group]) : m.rgb;
-            if (m.marker && baseId(m).replace(/-l$/, '') === 'MARK-incision' && ['prepare', 'sterile'].includes(steps[stage]?.id)) rgb = [.055, .045, .045];
+            gl.uniform1f(uniforms.InkProgress, m.group === 'skin' && onOperativeSide(m) ? inkProgress : 0);
             if (see) {
                 gl.enable(gl.BLEND);
                 gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);

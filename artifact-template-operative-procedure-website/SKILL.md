@@ -57,10 +57,10 @@ Deliver a complete editable static site with root `index.html`, all runtime/anat
 
 ## Study text, paper figures and skin marking
 
-Keep the existing short step summary visible and place an expandable **Step notes & sources** section below it. Give every step a specific anatomical landmark, rationale or relationship to inspect and cite the linked Papers entries that support it. Put an expandable, cited **Approach background** in the first step. Use an atlas chapter when available for context. Separate observed evidence from model-only reversals and reconstruction choices.
+Keep the short step summary visible. Follow it with one compact **Details** dropdown and one paragraph that explains the anatomy, purpose and relationships at a medical student level. Use the first step to introduce the approach. Put short citation markers at the end of each paragraph and keep full references in Papers. Use an atlas chapter when available. Identify model-only reversals and reconstruction choices.
 
 Bundle a verified source image for every step and variant in **2D Figures**. For a paper-specific case, use figures from that paper. When there is no direct illustration, reuse the closest related figure and label it as context. Record the figure and panel, citation, publisher link, source page and license. Check redistribution rights for the intended audience. Render the images as soon as readers open the tab.
 
-For a specific case linked from a library, add a top-left **Back** link. Return to the in-library page that launched the case, preserving history where possible, with the Operative Cases index as a direct-entry fallback.
+Add a high-contrast, borderless **Back** link to the left of the title for every simulation reached from a library. Return to the library page that launched the guide. Use the Procedure Library or Operative Cases index as the direct-entry fallback for the respective guide.
 
-Render the surface line as black surgical ink during skin marking and draping, where applicable. Keep the incision, deeper maneuvers and teaching overlays visually distinguishable.
+Draw black skin ink in the skin mesh’s rest coordinates at the marking step. Keep it visible on the exterior skin through later steps, moving with both cut edges and any reflected flaps. Keep other teaching overlays distinct. Clear and hide the anatomy labels and their leader SVG while 2D Figures is active.
